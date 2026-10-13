@@ -33,7 +33,8 @@ rm -f dist/RAMOptimizer-windows.zip
 git add Cargo.toml Cargo.lock
 git commit -m "Release v$version"
 git tag "v$version"
-git push --follow-tags
+git push
+git push origin "v$version"
 
 gh release create "v$version" \
     dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig dist/RAMOptimizer-windows.zip \

@@ -2,6 +2,7 @@
 //!
 //!   release-tool keygen               create the signing key (once)
 //!   release-tool sign <exe> <version>  write <exe>.sig
+//!   release-tool verify <exe> <version> check <exe>.sig like the app does
 //!
 //! The private key lives outside the repository, in
 //! ~/.config/ram-optimizer/update-signing.key. Back it up: without it, new
@@ -19,7 +20,8 @@ fn main() {
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["keygen"] => keygen(),
         ["sign", exe, version] => sign(exe, version),
-        _ => Err("usage: release-tool keygen | release-tool sign <exe> <version>".into()),
+        ["verify", exe, version] => verify(exe, version),
+        _ => Err("usage: release-tool keygen | sign <exe> <version> | verify <exe> <version>".into()),
     };
     if let Err(err) = result {
         eprintln!("error: {err}");
@@ -52,6 +54,15 @@ fn keygen() -> Result<(), String> {
     fs::write(PUBLIC_KEY_FILE, format!("{public_hex}\n")).map_err(|e| e.to_string())?;
     println!("Private key: {} (keep it secret, back it up)", path.display());
     println!("Public key:  {PUBLIC_KEY_FILE}");
+    Ok(())
+}
+
+fn verify(exe: &str, version: &str) -> Result<(), String> {
+    let bytes = fs::read(exe).map_err(|e| format!("can't read {exe}: {e}"))?;
+    let signature = fs::read_to_string(format!("{exe}.sig")).map_err(|e| e.to_string())?;
+    let public = fs::read_to_string(PUBLIC_KEY_FILE).map_err(|e| e.to_string())?;
+    update::verify(&public, version, &bytes, &signature)?;
+    println!("{exe}: valid signature for version {version}");
     Ok(())
 }
 
