@@ -215,7 +215,7 @@ pub fn evaluate(lines: &str, snap: &MemorySnapshot) -> Vec<Finding> {
         Some(false) => findings.push(Finding::new(
             Level::Warning,
             "Memory compression is off",
-            "Turning it on lets Windows fit more in RAM. In an admin PowerShell, run: Enable-MMAgent -MemoryCompression",
+            "It's on by default in Windows 10 and 11, so a tweak tool probably turned it off. Turning it back on lets Windows fit more in RAM.",
         )),
         None => {}
     }
