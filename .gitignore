@@ -4,3 +4,4 @@
 /dist/*.sig
 .DS_Store
 .netlify
+/dist/ci/

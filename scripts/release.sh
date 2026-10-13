@@ -1,18 +1,20 @@
 #!/bin/sh
-# Publishes a new version: every installed copy updates itself within hours.
+# Publishes a new version: every installed copy updates itself.
 #
-#   ./scripts/release.sh 0.2.0 "What changed"
+#   ./scripts/release.sh 0.2.2 "What changed"
 #
-# Builds the Windows .exe, signs it with the key in
-# ~/.config/ram-optimizer/update-signing.key, commits, tags, pushes, and
-# creates the GitHub release the app downloads from.
+# Bumps the version, tags and pushes. GitHub Actions then builds the .exe on
+# Windows with Microsoft's compiler (.github/workflows/windows.yml); this
+# script downloads it, signs it with the key in
+# ~/.config/ram-optimizer/update-signing.key and creates the GitHub release
+# the app updates from.
 set -e
 cd "$(dirname "$0")/.."
 
 version="$1"
 notes="${2:-Bug fixes and improvements.}"
 if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "usage: $0 <version like 0.2.0> [release notes]" >&2
+    echo "usage: $0 <version like 0.2.2> [release notes]" >&2
     exit 1
 fi
 if [ -n "$(git status --porcelain)" ]; then
@@ -24,20 +26,36 @@ echo "Releasing $current -> $version"
 
 # The app compares this version with the latest release to decide whether to update.
 sed -i '' "s/^version = \"$current\"/version = \"$version\"/" Cargo.toml
-cargo build --release --target x86_64-pc-windows-gnu
-cp target/x86_64-pc-windows-gnu/release/ram-optimizer.exe dist/RAMOptimizer.exe
+cargo update --workspace --offline -q
+git add Cargo.toml Cargo.lock
+git commit -q -m "Release v$version" ${RELEASE_TRAILER:+-m "$RELEASE_TRAILER"}
+git tag "v$version"
+git push -q
+git push -q origin "v$version"
+
+echo "Waiting for the Windows build on GitHub Actions..."
+run_id=""
+for _ in $(seq 1 30); do
+    run_id=$(gh run list --workflow windows.yml --branch "v$version" --limit 1 --json databaseId --jq '.[0].databaseId')
+    [ -n "$run_id" ] && break
+    sleep 5
+done
+if [ -z "$run_id" ]; then
+    echo "The Windows build didn't start; check the Actions tab on GitHub." >&2
+    exit 1
+fi
+gh run watch "$run_id" --exit-status --interval 20 > /dev/null
+
+rm -rf dist/ci
+gh run download "$run_id" -n RAMOptimizer -D dist/ci
+cp dist/ci/ram-optimizer.exe dist/RAMOptimizer.exe
 cargo run -q -p release-tool -- sign dist/RAMOptimizer.exe "$version"
+
 zip="RAMOptimizer-v$version-windows.zip"
 rm -f dist/RAMOptimizer*-windows.zip
 (cd dist && zip -q "$zip" RAMOptimizer.exe HOW-TO-TEST.txt)
 
-git add Cargo.toml Cargo.lock
-git commit -m "Release v$version"
-git tag "v$version"
-git push
-git push origin "v$version"
-
 gh release create "v$version" \
     dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig "dist/$zip" \
     --title "v$version" --notes "$notes"
-echo "Released v$version. Installed copies will update within a few hours (or on their next start)."
+echo "Released v$version. Installed copies update the next time they open."
