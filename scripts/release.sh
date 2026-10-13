@@ -55,7 +55,18 @@ zip="RAMOptimizer-v$version-windows.zip"
 rm -f dist/RAMOptimizer*-windows.zip
 (cd dist && zip -q "$zip" RAMOptimizer.exe HOW-TO-TEST.txt)
 
+# Upload as a draft first, then publish in a separate step: if publishing
+# hits a network error, `gh release create` deletes the whole release, but a
+# draft survives and the publish step can simply be retried.
 gh release create "v$version" \
     dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig "dist/$zip" \
-    --title "v$version" --notes "$notes"
+    --title "v$version" --notes "$notes" --draft --verify-tag
+for attempt in 1 2 3 4 5; do
+    gh release edit "v$version" --draft=false --latest && break
+    if [ "$attempt" = 5 ]; then
+        echo "Couldn't publish the draft; run: gh release edit v$version --draft=false --latest" >&2
+        exit 1
+    fi
+    sleep 10
+done
 echo "Released v$version. Installed copies update the next time they open."
