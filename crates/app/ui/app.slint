@@ -57,6 +57,7 @@ export component AppWindow inherits Window {
 
     // Settings.
     in-out property <bool> start-with-windows: true;
+    in-out property <bool> admin-mode: false;
     in-out property <bool> alerts-enabled: true;
     in-out property <bool> auto-game-mode: true;
     in property <[GamingRow]> gaming-rows;
@@ -78,6 +79,7 @@ export component AppWindow inherits Window {
     // Something in settings changed; the Rust side reads and saves them all.
     callback settings-changed();
     callback settings-opened();
+    callback admin-mode-toggled(bool);
     callback set-startup(string, bool);
     callback toggle-gaming-close(string, bool);
     callback run-checkup();
@@ -535,6 +537,16 @@ export component AppWindow inherits Window {
                                 Palette.theme = theme;
                                 root.settings-changed();
                             }
+                        }
+                    }
+
+                    SettingRow {
+                        title: "Admin mode";
+                        detail: "Lets game mode clear the cache too";
+                        checked: root.admin-mode;
+                        toggled(on) => {
+                            root.admin-mode = on;
+                            root.admin-mode-toggled(on);
                         }
                     }
 

@@ -1,5 +1,5 @@
 # Builds the Windows .exe with Microsoft's compiler (MSVC) on a real Windows
-# machine and runs every test there. Antivirus tools trust MSVC builds more
+# machine, runs every test there and wraps the .exe in the installer. Antivirus tools trust MSVC builds more
 # than cross-compiled MinGW ones. scripts/release.sh downloads the result,
 # signs it locally and publishes the release.
 name: Windows build
@@ -23,8 +23,19 @@ jobs:
         run: cargo test --workspace
       - name: Build
         run: cargo build --release -p ram-optimizer
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          & $iscc /Qp "/DAppVersion=$version" installer\RAMOptimizer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item target\release\ram-optimizer.exe out\
+          Copy-Item target\installer\RAMOptimizerSetup.exe out\
       - uses: actions/upload-artifact@v4
         with:
           name: RAMOptimizer
-          path: target/release/ram-optimizer.exe
+          path: out/
           if-no-files-found: error

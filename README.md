@@ -33,4 +33,8 @@ brew install mingw-w64
 ./scripts/build-windows.sh
 ```
 
-This produces `dist/RAMOptimizer-windows.zip` (a standalone .exe plus `HOW-TO-TEST.txt`).
+This produces `dist/RAMOptimizer-test-windows.zip` (a standalone .exe plus `HOW-TO-TEST.txt`). Releases are built on GitHub Actions instead, together with the installer (`installer/RAMOptimizer.iss`); see `scripts/release.sh`.
+
+## License
+
+MIT; see [LICENSE](LICENSE).

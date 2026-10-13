@@ -49,6 +49,8 @@ gh run watch "$run_id" --exit-status --interval 20 > /dev/null
 rm -rf dist/ci
 gh run download "$run_id" -n RAMOptimizer -D dist/ci
 cp dist/ci/ram-optimizer.exe dist/RAMOptimizer.exe
+# New users download the installer; installed copies update with the .exe.
+cp dist/ci/RAMOptimizerSetup.exe dist/RAMOptimizerSetup.exe
 cargo run -q -p release-tool -- sign dist/RAMOptimizer.exe "$version"
 
 zip="RAMOptimizer-v$version-windows.zip"
@@ -59,7 +61,7 @@ rm -f dist/RAMOptimizer*-windows.zip
 # hits a network error, `gh release create` deletes the whole release, but a
 # draft survives and the publish step can simply be retried.
 gh release create "v$version" \
-    dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig "dist/$zip" \
+    dist/RAMOptimizerSetup.exe dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig "dist/$zip" \
     --title "v$version" --notes "$notes" --draft --verify-tag
 for attempt in 1 2 3 4 5; do
     gh release edit "v$version" --draft=false --latest && break

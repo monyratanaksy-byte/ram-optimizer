@@ -587,6 +587,31 @@ impl WindowsSource {
     }
 }
 
+/// The uninstall entry Inno Setup creates; the GUID is the `AppId` in
+/// installer/RAMOptimizer.iss.
+const UNINSTALL_KEY: &str =
+    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{10180DC6-8318-4F40-9C1E-DCB8345C55B4}_is1";
+
+/// Updates replace the .exe without the installer, so this keeps the version
+/// shown in Settings > Apps in step. Does nothing for copies run from
+/// anywhere other than the installed folder.
+pub fn sync_installed_version(version: &str) {
+    use registry::{string_value, RegKey, Root};
+    let Some(key) = RegKey::open(Root::CurrentUser, UNINSTALL_KEY) else { return };
+    let read = |name: &str| key.get(name).map(|data| string_value(&data)).unwrap_or_default();
+    let Some(dir) = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.to_path_buf())) else {
+        return;
+    };
+    let installed_here = read("InstallLocation")
+        .trim_end_matches('\\')
+        .eq_ignore_ascii_case(&dir.to_string_lossy());
+    if installed_here && read("DisplayVersion") != version {
+        if let Ok(key) = RegKey::create(Root::CurrentUser, UNINSTALL_KEY) {
+            let _ = key.set_string("DisplayVersion", version);
+        }
+    }
+}
+
 /// Waits up to `timeout` for a process to exit (the old copy, after an update).
 pub fn wait_for_exit(pid: u32, timeout: Duration) {
     if let Some(process) = Handle::open_process(PROCESS_SYNCHRONIZE, pid) {

@@ -1,8 +1,8 @@
 //! Starting RAM Optimizer when you sign in.
 //!
-//! With admin rights it registers a scheduled task that runs elevated, so it
-//! starts with every feature and no permission prompt at each sign-in.
-//! Without them it uses the `Run` registry key and starts in limited mode.
+//! Normally this is the `Run` registry key, like most apps. In admin mode
+//! (which the user turns on) it registers a scheduled task that runs
+//! elevated instead, so admin mode needs no permission prompt at sign-in.
 
 use std::os::windows::process::CommandExt;
 use std::path::Path;
@@ -18,7 +18,7 @@ pub const STARTUP_ARG: &str = "--startup";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-pub fn set_enabled(enabled: bool) -> Result<(), String> {
+pub fn set_enabled(enabled: bool, admin_mode: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let run = RegKey::create(Root::CurrentUser, RUN_KEY)?;
     let marker = marker_path();
@@ -32,7 +32,7 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
         }
         return Ok(());
     }
-    if WindowsSource::is_elevated() {
+    if admin_mode && WindowsSource::is_elevated() {
         // Already registered for this exact .exe: nothing to do, and no
         // need to start schtasks.exe on every launch.
         let registered = marker.as_ref().and_then(|m| std::fs::read_to_string(m).ok());
@@ -47,8 +47,19 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
         return Ok(());
     }
     if task_exists() {
-        // Registered earlier with admin rights; keep that (it starts elevated).
-        return Ok(());
+        if admin_mode {
+            // Registered earlier with admin rights; keep that (it starts elevated).
+            return Ok(());
+        }
+        // Admin mode is off: go back to the Run key. Removing a task made
+        // with admin rights may need them too; until then, keep the task so
+        // the app still starts (two launches would just merge into one).
+        if !schtasks(&["/Delete", "/TN", OWN_ENTRY, "/F"]) {
+            return Ok(());
+        }
+        if let Some(marker) = &marker {
+            let _ = std::fs::remove_file(marker);
+        }
     }
     run.set_string(
         OWN_ENTRY,

@@ -7,6 +7,8 @@ default-members = ["crates/core", "crates/app"]
 [workspace.package]
 edition = "2021"
 version = "0.3.0"
+license = "MIT"
+repository = "https://github.com/monyratanaksy-byte/ram-optimizer"
 
 # The optimizer must stay light itself, so release builds favor size.
 [profile.release]

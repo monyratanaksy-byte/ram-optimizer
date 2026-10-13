@@ -2,6 +2,7 @@
 name = "ram-optimizer"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 ram-core = { path = "../core" }

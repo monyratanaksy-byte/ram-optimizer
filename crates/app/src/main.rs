@@ -40,6 +40,12 @@ struct Args {
     wait_pid: Option<u32>,
     /// Started by an update: say so.
     updated: bool,
+    /// Ask the running copy to quit, then exit (used by the installer).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    quit: bool,
+    /// Quit the running copy and stop starting with Windows (uninstaller).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    uninstall: bool,
 }
 
 impl Args {
@@ -54,6 +60,8 @@ impl Args {
                 .nth(1)
                 .and_then(|pid| pid.parse().ok()),
             updated: has("--updated"),
+            quit: has("--quit"),
+            uninstall: has("--uninstall"),
         }
     }
 }
@@ -65,6 +73,17 @@ fn main() {
     #[cfg(windows)]
     if !args.demo {
         use ram_core::win::instance::SingleInstance;
+        if args.quit || args.uninstall {
+            // The running copy restores every app it changed on the way out.
+            let quit = SingleInstance::quit_existing(Duration::from_secs(10));
+            if args.uninstall {
+                if let Err(err) = ram_core::win::autostart::set_enabled(false, false) {
+                    log_error(&format!("removing start with Windows: {err}"));
+                }
+            }
+            // The installer ends the old copy itself when this fails.
+            std::process::exit(if quit { 0 } else { 1 });
+        }
         if let Some(pid) = args.wait_pid {
             ram_core::win::wait_for_exit(pid, Duration::from_secs(15));
         }
@@ -74,7 +93,11 @@ fn main() {
         if SingleInstance::find_existing(!args.startup) {
             return;
         }
-        let wants_admin = !args.startup && !args.no_elevate && !ram_core::win::WindowsSource::is_elevated();
+        // Admin rights only when the user turned admin mode on.
+        let wants_admin = Settings::load().admin_mode
+            && !args.startup
+            && !args.no_elevate
+            && !ram_core::win::WindowsSource::is_elevated();
         if wants_admin {
             let mut relaunch: Vec<String> = std::env::args().skip(1).collect();
             relaunch.push("--no-elevate".into());
@@ -116,11 +139,11 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     let settings = Settings::load();
     apply_settings_to_ui(&ui, &settings);
-    // e.g. "RAM Optimizer v0.2.0 · limited", so an update is visible at a glance.
+    // e.g. "RAM Optimizer v0.4.0 · admin", so an update is visible at a glance.
     let mode = if demo {
         " · demo data"
-    } else if cfg!(windows) && !is_elevated() {
-        " · limited"
+    } else if cfg!(windows) && is_elevated() {
+        " · admin"
     } else {
         ""
     };
@@ -128,7 +151,9 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
     let updates_note = if cfg!(windows) && !demo { " · updates automatically" } else { "" };
     ui.set_version_text(format!("Version {}{updates_note}", update::CURRENT_VERSION).into());
     if !demo {
-        set_autostart(settings.start_with_windows);
+        set_autostart(settings.start_with_windows, settings.admin_mode);
+        #[cfg(windows)]
+        ram_core::win::sync_installed_version(update::CURRENT_VERSION);
     }
 
     let state = Rc::new(RefCell::new(State::new(source, settings)));
@@ -189,6 +214,10 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
             #[cfg(windows)]
             if instance.as_ref().is_some_and(|i| i.show_requested()) {
                 show_window(&ui, &updater);
+            }
+            #[cfg(windows)]
+            if instance.as_ref().is_some_and(|i| i.quit_requested()) {
+                quit(&mut state);
             }
         });
     }
@@ -344,9 +373,19 @@ fn wire_settings(ui: &AppWindow, state: &Rc<RefCell<State>>, demo: bool) {
             state.auto.threshold = state.settings.auto_threshold as f32 / 100.0;
             state.auto.cooldown = Duration::from_secs(state.settings.auto_interval.into());
             if !demo && state.settings.start_with_windows != before {
-                set_autostart(state.settings.start_with_windows);
+                set_autostart(state.settings.start_with_windows, state.settings.admin_mode);
             }
             state.save_settings();
+            view::render(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_admin_mode_toggled(move |on| {
+            let Some(ui) = ui_weak.upgrade() else { return };
+            let mut state = state.borrow_mut();
+            set_admin_mode(&ui, &mut state, on, demo);
             view::render(&ui, &mut state);
         });
     }
@@ -374,12 +413,48 @@ fn wire_settings(ui: &AppWindow, state: &Rc<RefCell<State>>, demo: bool) {
     }
 }
 
+/// Admin mode takes effect by restarting with admin rights (Windows asks
+/// first); turning it off takes effect at the next start.
+fn set_admin_mode(ui: &AppWindow, state: &mut State, on: bool, demo: bool) {
+    state.settings.admin_mode = on;
+    state.save_settings();
+    if demo {
+        state.set_status(if on { "Admin mode on" } else { "Admin mode off" });
+        return;
+    }
+    set_autostart(state.settings.start_with_windows, on);
+    if !on {
+        let note = if is_elevated() { "Admin mode turns off next time the app starts" } else { "Admin mode off" };
+        state.set_status(note);
+        return;
+    }
+    if is_elevated() {
+        state.set_status("Admin mode on");
+        return;
+    }
+    #[cfg(windows)]
+    {
+        // The new copy waits for this one to exit before taking over.
+        let args = ["--wait-pid".to_string(), std::process::id().to_string(), "--no-elevate".to_string()];
+        if ram_core::win::relaunch_as_admin(&args) {
+            quit(state);
+        }
+    }
+    // Declined (or not Windows): stay as is.
+    state.settings.admin_mode = false;
+    state.save_settings();
+    set_autostart(state.settings.start_with_windows, false);
+    ui.set_admin_mode(false);
+    state.set_status("Admin mode needs Windows' permission");
+}
+
 fn apply_settings_to_ui(ui: &AppWindow, settings: &Settings) {
     ui.set_auto_enabled(settings.auto_clear);
     ui.set_auto_threshold(settings.auto_threshold.into());
     let interval = INTERVALS.iter().position(|&s| s == settings.auto_interval).unwrap_or(INTERVALS.len() - 1);
     ui.set_auto_interval(interval as i32);
     ui.set_start_with_windows(settings.start_with_windows);
+    ui.set_admin_mode(settings.admin_mode);
     ui.set_alerts_enabled(settings.alerts);
     ui.set_auto_game_mode(settings.auto_game_mode);
     ui.global::<Palette>().set_theme(settings.theme.index());
@@ -449,15 +524,15 @@ fn is_elevated() -> bool {
 
 /// Registers (or removes) starting at sign-in, off the UI thread since it
 /// may call Task Scheduler.
-fn set_autostart(enabled: bool) {
+fn set_autostart(enabled: bool, admin_mode: bool) {
     #[cfg(windows)]
     std::thread::spawn(move || {
-        if let Err(err) = ram_core::win::autostart::set_enabled(enabled) {
+        if let Err(err) = ram_core::win::autostart::set_enabled(enabled, admin_mode) {
             log_error(&format!("start with Windows: {err}"));
         }
     });
     #[cfg(not(windows))]
-    let _ = enabled;
+    let _ = (enabled, admin_mode);
 }
 
 /// The card draws its own shadow. The macOS window shadow would trace the

@@ -10,9 +10,8 @@ Run it
    so if you move it later, just open it once from the new place.
 2. Double-click RAMOptimizer.exe. If Windows says "Windows protected your
    PC" (the file isn't signed): More info > Run anyway.
-3. Click "Yes" when it asks for administrator permission. With "Yes" it
-   can also clear the cache and start at sign-in without asking again.
-   With "No" it still works; the title says "limited".
+3. It runs without administrator rights. To let game mode also clear the
+   cache, turn on Settings > General > Admin mode (Windows asks once).
 
 Where it lives
 --------------

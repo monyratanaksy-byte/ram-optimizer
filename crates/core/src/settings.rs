@@ -38,6 +38,9 @@ pub struct Settings {
     /// Seconds between auto-clear runs while RAM stays over the threshold.
     pub auto_interval: u32,
     pub start_with_windows: bool,
+    /// Ask Windows for admin rights at launch, for the few features that
+    /// need them (clearing the cache, managing apps that run as admin).
+    pub admin_mode: bool,
     pub alerts: bool,
     pub theme: Theme,
     /// Turn game mode on when a game starts, off when it exits.
@@ -55,6 +58,7 @@ impl Default for Settings {
             auto_threshold: 80,
             auto_interval: 300,
             start_with_windows: true,
+            admin_mode: false,
             alerts: true,
             theme: Theme::System,
             auto_game_mode: true,
@@ -113,6 +117,7 @@ impl Settings {
                     }
                 }
                 "start_with_windows" => settings.start_with_windows = flag,
+                "admin_mode" => settings.admin_mode = flag,
                 "alerts" => settings.alerts = flag,
                 "theme" => settings.theme = Theme::from_index(value.parse().unwrap_or(0)),
                 "auto_game_mode" => settings.auto_game_mode = flag,
@@ -149,11 +154,12 @@ impl Settings {
             .map(|(name, bytes)| format!("{name}:{}", bytes / crate::MIB))
             .collect();
         format!(
-            "auto_clear={}\nauto_threshold={}\nauto_interval={}\nstart_with_windows={}\nalerts={}\ntheme={}\nauto_game_mode={}\nclose_when_gaming={}\nlimits={}\n",
+            "auto_clear={}\nauto_threshold={}\nauto_interval={}\nstart_with_windows={}\nadmin_mode={}\nalerts={}\ntheme={}\nauto_game_mode={}\nclose_when_gaming={}\nlimits={}\n",
             self.auto_clear,
             self.auto_threshold,
             self.auto_interval,
             self.start_with_windows,
+            self.admin_mode,
             self.alerts,
             self.theme.index(),
             self.auto_game_mode,
@@ -174,6 +180,7 @@ mod tests {
             auto_threshold: 65,
             auto_interval: 15,
             start_with_windows: false,
+            admin_mode: true,
             alerts: false,
             theme: Theme::Dark,
             auto_game_mode: false,
