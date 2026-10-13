@@ -276,10 +276,10 @@ function renderAuto() {
   if (!inner.querySelector(".range")) {
     inner.innerHTML = `
       <div class="auto-row">
-        <div>Auto-clear<small id="auto-detail"></small></div>
-        <button class="switch" id="auto-switch" type="button" role="switch" aria-label="Auto-clear"></button>
+        <div>Auto clear<small id="auto-detail"></small></div>
+        <button class="switch" id="auto-switch" type="button" role="switch" aria-label="Auto clear"></button>
       </div>
-      <input class="range" id="auto-range" type="range" min="30" max="90" step="5" aria-label="Auto-clear limit">
+      <input class="range" id="auto-range" type="range" min="30" max="90" step="5" aria-label="Auto clear limit">
       <div class="range-marks"><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span></div>
       <p class="auto-note" id="auto-note"></p>`;
     $("auto-switch").addEventListener("click", () => { autoOn = !autoOn; renderAuto(); renderSummary(); });

@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RAM Optimizer: see and free your PC's memory</title>
-  <meta name="description" content="A tiny, good-looking RAM optimizer for Windows. See what's using memory, close what you don't need, and make room for games, honestly.">
+  <title>RAM Optimizer: see and free your memory</title>
+  <meta name="description" content="A small, free RAM optimizer for Windows. See what uses your memory, close what you don't need, and make room for games.">
+  <link rel="canonical" href="https://ramoptimizer.is-a.dev/">
   <meta property="og:title" content="RAM Optimizer">
-  <meta property="og:description" content="See what's using your PC's memory, close what you don't need, and make room for games.">
-  <meta property="og:image" content="assets/icon-1024.png">
+  <meta property="og:description" content="See what uses your memory. Close what you don't need. Make room for games.">
+  <meta property="og:url" content="https://ramoptimizer.is-a.dev/">
+  <meta property="og:image" content="https://ramoptimizer.is-a.dev/assets/icon-1024.png">
   <meta name="theme-color" content="#E4E5E9">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" href="assets/icon.png" type="image/png">
@@ -35,7 +37,6 @@
     <nav aria-label="Main">
       <a href="#features">Features</a>
       <a href="#game-mode">Game mode</a>
-      <a href="#honest">How it works</a>
       <a href="#download">Download</a>
     </nav>
     <div class="nav-actions">
@@ -51,21 +52,21 @@
     <!-- Hero ---------------------------------------------------------------->
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow reveal"><span class="pulse-dot"></span>Free for Windows 10 &amp; 11</p>
+        <p class="eyebrow reveal"><span class="pulse-dot"></span>Free for Windows</p>
         <h1 class="reveal">Know your memory.<br><span class="soft">Free it when it matters.</span></h1>
-        <p class="lead reveal">A tiny, good-looking RAM optimizer. See exactly what's using your memory, close what you don't need, and make room for games, without the fake "boost" tricks.</p>
+        <p class="lead reveal">See what uses your RAM. Close what you don't need. Make room for games.</p>
         <div class="cta reveal">
           <a class="btn btn-primary" href="https://github.com/monyratanaksy-byte/ram-optimizer/releases/latest/download/RAMOptimizer.exe">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>
-            Download .exe
+            Download
           </a>
-          <a class="btn btn-ghost" href="https://github.com/monyratanaksy-byte/ram-optimizer">View source</a>
+          <a class="btn btn-ghost" href="https://github.com/monyratanaksy-byte/ram-optimizer">Source</a>
         </div>
-        <p class="fine reveal"><span class="version-label">Latest version</span> · 11 MB · no install needed</p>
+        <p class="fine reveal"><span class="version-label">Latest version</span> · 11 MB · No install</p>
       </div>
 
       <div class="hero-demo reveal" id="demo-wrap">
-        <p class="try-it" aria-hidden="true">Try it! It's interactive</p>
+        <p class="try-it" aria-hidden="true">Try it</p>
         <!-- A working copy of the app's window, in HTML -->
         <div class="app" id="app" role="group" aria-label="Interactive preview of the RAM Optimizer window">
           <div class="app-top">
@@ -108,10 +109,10 @@
               <button class="nbtn" data-panel="apps" type="button" aria-label="Top apps" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h9"/></svg>
               </button>
-              <button class="nbtn" data-panel="history" type="button" aria-label="Usage history" aria-expanded="false">
+              <button class="nbtn" data-panel="history" type="button" aria-label="History" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15.5 7H21v5.5"/></svg>
               </button>
-              <button class="nbtn ring-btn" data-panel="auto" type="button" aria-label="Auto-clear settings" aria-expanded="false">
+              <button class="nbtn ring-btn" data-panel="auto" type="button" aria-label="Auto clear" aria-expanded="false">
                 <svg class="ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="ring-track" cx="18" cy="18" r="13"/><circle class="ring-fill" id="ring-fill" cx="18" cy="18" r="13"/></svg>
                 <span class="ring-num" id="ring-num">80</span>
               </button>
@@ -131,64 +132,49 @@
 
     <!-- Quick facts --------------------------------------------------------->
     <section class="facts" aria-label="At a glance">
-      <div class="fact reveal"><b>11 MB</b><span>One small .exe</span></div>
+      <div class="fact reveal"><b>11 MB</b><span>One file</span></div>
       <div class="fact reveal"><b>Rust</b><span>Fast and light</span></div>
-      <div class="fact reveal"><b>Signed</b><span>Auto-updates</span></div>
-      <div class="fact reveal"><b>0 ads</b><span>No tracking</span></div>
+      <div class="fact reveal"><b>Signed</b><span>Safe updates</span></div>
+      <div class="fact reveal"><b>No ads</b><span>No tracking</span></div>
     </section>
 
     <!-- Features ------------------------------------------------------------>
     <section class="section" id="features">
       <div class="section-head reveal">
         <p class="eyebrow">Features</p>
-        <h2>Everything about your RAM,<br>in one small window</h2>
+        <h2>Simple. Small. Honest.</h2>
       </div>
 
       <div class="grid">
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="3"/><path d="M8 9v6M13 9v6"/></svg></div>
-          <h3>See where memory goes</h3>
-          <p>In use, compressed, cached and free, explained simply. Cached memory counts as available, so a "full" PC isn't automatically a slow one.</p>
+          <h3>Memory at a glance</h3>
+          <p>In use, cached and free, explained simply.</p>
         </article>
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h9"/></svg></div>
-          <h3>Top apps, grouped</h3>
-          <p>Chrome's 30 processes show up as one "Chrome", biggest first. Close what you don't need. It asks first and lets apps save their work.</p>
+          <h3>Top apps</h3>
+          <p>Your biggest apps first. Close any with one click.</p>
         </article>
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 24 24"><path d="M13 2.5 5 13.5h6.5l-1 8L19 10h-6.5z"/></svg></div>
-          <h3>Game mode, on its own</h3>
-          <p>Turns on when a game starts and off when it closes. Background apps step aside so your game gets the memory.</p>
+          <h3>Game mode</h3>
+          <p>Turns on when a game starts. Your game gets the RAM.</p>
         </article>
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="11" class="w-track"/><path d="M18 7a11 11 0 1 1-10.5 7.7"/></svg></div>
-          <h3>Auto-clear</h3>
-          <p>Pick a limit from 30% to 90%. Past it, idle apps get trimmed, at most every 5 minutes, so it never fights your apps.</p>
+          <h3>Auto clear</h3>
+          <p>Frees idle apps when memory gets full.</p>
         </article>
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 24 24"><path d="M5 12h4l2-5 3 10 2-5h3"/></svg></div>
           <h3>Startup apps</h3>
-          <p>See everything that launches with Windows and how much RAM it uses, then switch it off. Same switch as Task Manager, fully reversible.</p>
+          <p>See what starts with Windows. Turn it off.</p>
         </article>
         <article class="card reveal">
           <div class="well"><svg viewBox="0 0 24 24"><path d="M9 12.5l2 2 4-4.5"/><circle cx="12" cy="12" r="8.5"/></svg></div>
-          <h3>RAM check-up</h3>
-          <p>Finds single-channel memory, RAM below its rated speed, a missing page file or memory compression turned off, with plain-language fixes.</p>
-        </article>
-        <article class="card reveal">
-          <div class="well"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15.5 7H21v5.5"/></svg></div>
-          <h3>24-hour history</h3>
-          <p>Last minute, hour or day, plus which app was biggest when memory peaked. Spot the culprit, not just the spike.</p>
-        </article>
-        <article class="card reveal">
-          <div class="well"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4"/></svg></div>
-          <h3>Leak alerts</h3>
-          <p>A heads-up when memory is about to run out, or when an app keeps growing for an hour, before your PC starts to crawl.</p>
-        </article>
-        <article class="card reveal">
-          <div class="well"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg></div>
-          <h3>Lives in the tray</h3>
-          <p>Starts with Windows, stays out of the way, and opens with a click. Light, dark or follow your system.</p>
+          <h3>Checkup</h3>
+          <p>Finds slow RAM settings and shows how to fix them.</p>
         </article>
       </div>
     </section>
@@ -197,21 +183,21 @@
     <section class="section split" id="game-mode">
       <div class="split-copy reveal">
         <p class="eyebrow">Game mode</p>
-        <h2>Your game first.<br><span class="soft">Everything else, later.</span></h2>
-        <p>When a game launches from Steam, Epic, Riot, Xbox, GOG, EA or Ubisoft, or goes fullscreen, RAM Optimizer:</p>
+        <h2>Your game first.</h2>
+        <p>When a game starts, RAM Optimizer:</p>
         <ol class="steps">
-          <li><b>Lowers background apps' memory priority</b>, so Windows takes RAM from them first.</li>
-          <li><b>Trims idle apps once</b> and clears the standby cache.</li>
-          <li><b>Closes the apps you picked</b>, like a browser you never need mid-game.</li>
-          <li><b>Puts everything back</b> the moment you quit.</li>
+          <li>Puts background apps last in line for memory.</li>
+          <li>Frees idle apps once.</li>
+          <li>Closes the apps you picked.</li>
+          <li>Puts everything back when you quit.</li>
         </ol>
-        <p class="note">It never kills apps you didn't choose, and never touches Windows itself.</p>
+        <p class="note">It never closes anything you didn't pick.</p>
       </div>
       <div class="game-viz reveal" aria-hidden="true">
-        <div class="gv-row gv-game"><span class="gv-name">Your game</span><span class="gv-bar"><i></i></span><span class="gv-tag">priority</span></div>
-        <div class="gv-row"><span class="gv-name">Chrome</span><span class="gv-bar"><i></i></span><span class="gv-tag">lowered</span></div>
-        <div class="gv-row"><span class="gv-name">Discord</span><span class="gv-bar"><i></i></span><span class="gv-tag">lowered</span></div>
-        <div class="gv-row"><span class="gv-name">Steam</span><span class="gv-bar"><i></i></span><span class="gv-tag">trimmed</span></div>
+        <div class="gv-row gv-game"><span class="gv-name">Your game</span><span class="gv-bar"><i></i></span><span class="gv-tag">first</span></div>
+        <div class="gv-row"><span class="gv-name">Chrome</span><span class="gv-bar"><i></i></span><span class="gv-tag">waits</span></div>
+        <div class="gv-row"><span class="gv-name">Discord</span><span class="gv-bar"><i></i></span><span class="gv-tag">waits</span></div>
+        <div class="gv-row"><span class="gv-name">Steam</span><span class="gv-bar"><i></i></span><span class="gv-tag">freed</span></div>
         <div class="gv-row"><span class="gv-name">Spotify</span><span class="gv-bar"><i></i></span><span class="gv-tag">closed</span></div>
       </div>
     </section>
@@ -220,27 +206,26 @@
     <section class="section" id="honest">
       <div class="section-head reveal">
         <p class="eyebrow">How it works</p>
-        <h2>Honest by design</h2>
-        <p class="sub">Most "RAM boosters" make a number go down and your PC go slower. This one is built the other way around.</p>
+        <h2>No fake boosts</h2>
       </div>
       <div class="honest">
         <div class="honest-card reveal">
-          <h3>Unused RAM is wasted RAM</h3>
-          <p>Windows fills spare memory with cache on purpose. RAM Optimizer shows cached memory separately and counts it as available, instead of "freeing" it to look good.</p>
+          <h3>Cached RAM is good</h3>
+          <p>Windows keeps spare memory as cache. We count it as available.</p>
           <div class="mini-bar inset" aria-hidden="true"><span class="m-use"></span><span class="m-cache"></span></div>
-          <div class="mini-legend"><span><i class="d-use"></i>In use</span><span><i class="d-cache"></i>Cached (still available)</span><span><i class="d-free"></i>Free</span></div>
+          <div class="mini-legend"><span><i class="d-use"></i>In use</span><span><i class="d-cache"></i>Cached</span><span><i class="d-free"></i>Free</span></div>
         </div>
         <div class="honest-card reveal">
-          <h3>No trimming on repeat</h3>
-          <p>Trimming the same apps over and over makes them reload from disk, which is exactly the stutter you're trying to avoid. Auto-clear runs at most every 5 minutes; game mode only when RAM is truly tight.</p>
+          <h3>No constant trimming</h3>
+          <p>Freeing the same apps over and over causes stutter. We don't do it.</p>
         </div>
         <div class="honest-card reveal">
           <h3>Closing is the real fix</h3>
-          <p>The only way to get memory back for good is to close an app, or stop it starting with Windows. So that's what it makes easy, with a confirmation and a chance to save.</p>
+          <p>Closing an app frees its memory for good. We make that easy and safe.</p>
         </div>
         <div class="honest-card reveal">
-          <h3>Signed updates</h3>
-          <p>New versions install themselves, and only if they're signed with the developer's private key. A tampered download is rejected, even if the download site were hacked.</p>
+          <h3>Safe updates</h3>
+          <p>Every update is signed. Fakes are rejected.</p>
         </div>
       </div>
     </section>
@@ -250,17 +235,17 @@
       <div class="download-card reveal">
         <img src="assets/icon.png" alt="" width="96" height="96" class="dl-icon">
         <h2>Get RAM Optimizer</h2>
-        <p class="sub">Free. One file. Windows 10 and 11, 64-bit.</p>
+        <p class="sub">Free. One file. Windows 10 and 11.</p>
         <a class="btn btn-primary btn-large" href="https://github.com/monyratanaksy-byte/ram-optimizer/releases/latest/download/RAMOptimizer.exe">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>
-          Download RAMOptimizer.exe
+          Download
         </a>
         <p class="fine"><span class="version-label">Latest version</span> · <a href="https://github.com/monyratanaksy-byte/ram-optimizer/releases">All releases</a></p>
 
         <ol class="install">
-          <li><span>1</span><div><b>Put it somewhere permanent</b>, like Documents. It starts with Windows from where it is.</div></li>
-          <li><span>2</span><div><b>Run it.</b> If Windows says "protected your PC", click <i>More info → Run anyway</i>. The file isn't code-signed yet.</div></li>
-          <li><span>3</span><div><b>Click Yes</b> on the admin prompt for every feature. It still works if you click No.</div></li>
+          <li><span>1</span><div>Save it somewhere permanent, like Documents.</div></li>
+          <li><span>2</span><div>Run it. If Windows warns you, click <b>More info</b>, then <b>Run anyway</b>.</div></li>
+          <li><span>3</span><div>Click <b>Yes</b> for all features.</div></li>
         </ol>
       </div>
     </section>
@@ -268,7 +253,7 @@
 
   <footer class="footer">
     <div class="brand small"><img src="assets/icon.png" alt="" width="22" height="22"><span>RAM Optimizer</span></div>
-    <p>Made with Rust and Slint. <a href="https://github.com/monyratanaksy-byte/ram-optimizer">Source on GitHub</a></p>
+    <p>Made with Rust and Slint. <a href="https://github.com/monyratanaksy-byte/ram-optimizer">Source</a></p>
   </footer>
 
   <script src="app.js" defer></script>
