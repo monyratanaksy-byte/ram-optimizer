@@ -3,14 +3,14 @@
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use ram_core::auto::AutoClear;
+use ram_core::auto::{AutoClear, SHORT_INTERVAL};
 use ram_core::checkup::Level;
 use ram_core::closing::CloseState;
 use ram_core::history::{Peak, MINUTES_PER_DAY};
-use ram_core::{format_size, to_gb, Pressure, MIB};
+use ram_core::{format_size, to_gb, Pressure, GIB, MIB};
 use slint::{Model, VecModel};
 
-use crate::state::{State, AUTO_COOLDOWN, RECENT_LEN};
+use crate::state::{State, RECENT_LEN};
 use crate::{AppRow, AppWindow, FindingRow, GamingRow, StartupRow};
 
 /// Sustained growth above this shows a "+X MB/min" chip.
@@ -81,6 +81,12 @@ fn render_apps(ui: &AppWindow, state: &State) {
                 .map(|rate| format!("+{:.0} MB/min", rate / MIB as f64))
                 .unwrap_or_default();
             let closing = state.closing.state(&app.name, now);
+            let limit = state.settings.limits.get(&app.name).copied();
+            // Suggest three quarters of what it uses now.
+            let start = limit.map_or(half_gb_steps(app.bytes * 3 / 4), half_gb_steps);
+            let end = half_gb_steps(app.bytes.max(limit.unwrap_or(0)) * 2)
+                .max(40)
+                .min(half_gb_steps(state.snap.total).max(5));
             AppRow {
                 name: app.name.as_str().into(),
                 letter: initial(&app.name).into(),
@@ -90,6 +96,10 @@ fn render_apps(ui: &AppWindow, state: &State) {
                 growth: growth.into(),
                 closing: closing == Some(CloseState::Closing),
                 can_force: closing == Some(CloseState::CanForce),
+                limit: limit.map(|bytes| format!("≤ {}", short_gb(bytes))).unwrap_or_default().into(),
+                limited: limit.is_some(),
+                limit_tenths: start.min(end),
+                limit_max: end,
             }
         })
         .collect();
@@ -236,19 +246,29 @@ fn auto_note(auto: &AutoClear, used_ratio: f32) -> (String, bool) {
     if !auto.enabled {
         return ("Off. Turn it on to free idle apps automatically.".into(), false);
     }
+    let short = auto.cooldown < SHORT_INTERVAL;
     if used_ratio >= auto.threshold {
-        let minutes = AUTO_COOLDOWN.as_secs() / 60;
+        let tip = if short { "A longer gap is easier on your PC." } else { "Raise the limit if apps feel slow." };
         return (
-            format!("RAM is already at {percent:.0}%, so this runs every {minutes} min. Raise the limit if apps feel slow."),
+            format!("RAM is at {percent:.0}%, so this runs every {}. {tip}", every(auto.cooldown)),
             true,
         );
     }
+    let tip = if short { " Short gaps can make idle apps slow to wake." } else { "" };
     match auto.last_run() {
         Some((at, freed)) => (
-            format!("Last run {} ago, freed {}.", ago(at.elapsed()), format_size(freed)),
+            format!("Last run {} ago, freed {}.{tip}", ago(at.elapsed()), format_size(freed)),
             false,
         ),
-        None => (format!("Waiting. RAM is at {percent:.0}%."), false),
+        None => (format!("Waiting. RAM is at {percent:.0}%.{tip}"), false),
+    }
+}
+
+/// "15 sec" or "5 min".
+fn every(gap: Duration) -> String {
+    match gap.as_secs() {
+        s if s < 60 => format!("{s} sec"),
+        s => format!("{} min", s / 60),
     }
 }
 
@@ -264,6 +284,22 @@ fn minutes_ago(minutes: usize) -> String {
         0 => "in the last minute".to_string(),
         m if m < 60 => format!("{m} min ago"),
         m => format!("{} h {} min ago", m / 60, m % 60),
+    }
+}
+
+/// Bytes as tenths of a GB, rounded to the nearest half GB (at least 0.5).
+fn half_gb_steps(bytes: u64) -> i32 {
+    let halves = (bytes as f64 / GIB as f64 * 2.0).round().max(1.0);
+    (halves * 5.0) as i32
+}
+
+/// "2 GB" or "2.5 GB".
+pub fn short_gb(bytes: u64) -> String {
+    let gb = to_gb(bytes);
+    if (gb - gb.round()).abs() < 0.05 {
+        format!("{:.0} GB", gb)
+    } else {
+        format!("{gb:.1} GB")
     }
 }
 

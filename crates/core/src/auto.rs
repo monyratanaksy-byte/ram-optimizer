@@ -2,6 +2,19 @@
 
 use std::time::{Duration, Instant};
 
+/// Gaps between runs the user can pick, in seconds.
+pub const INTERVALS: [u32; 6] = [5, 10, 15, 30, 60, 300];
+/// Below this, idle apps that wake up keep reloading from disk.
+pub const SHORT_INTERVAL: Duration = Duration::from_secs(30);
+
+/// The allowed interval closest to `seconds`.
+pub fn nearest_interval(seconds: u32) -> u32 {
+    INTERVALS
+        .into_iter()
+        .min_by_key(|&option| option.abs_diff(seconds))
+        .expect("INTERVALS isn't empty")
+}
+
 pub struct AutoClear {
     pub enabled: bool,
     /// Used-RAM ratio (0..1) that triggers a run.
@@ -59,6 +72,14 @@ mod tests {
         let mut auto = AutoClear::new(0.5, COOLDOWN);
         auto.enabled = false;
         assert!(!auto.is_due(0.9, Instant::now()));
+    }
+
+    #[test]
+    fn snaps_to_an_allowed_interval() {
+        assert_eq!(nearest_interval(0), 5);
+        assert_eq!(nearest_interval(12), 10);
+        assert_eq!(nearest_interval(200), 300);
+        assert_eq!(nearest_interval(9999), 300);
     }
 
     #[test]

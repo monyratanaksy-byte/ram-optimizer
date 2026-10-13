@@ -15,7 +15,7 @@ mod startup;
 
 pub use checkup::facts as checkup_facts;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
 use std::ptr::{null, null_mut};
@@ -35,6 +35,10 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
+use windows_sys::Win32::System::Memory::{
+    GetProcessWorkingSetSizeEx, SetProcessWorkingSetSizeEx, QUOTA_LIMITS_HARDWS_MAX_DISABLE,
+    QUOTA_LIMITS_HARDWS_MAX_ENABLE, QUOTA_LIMITS_HARDWS_MIN_DISABLE,
 };
 use windows_sys::Win32::System::Performance::{
     PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterValue,
@@ -57,6 +61,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     IsWindowVisible, PostMessageW, GW_OWNER, SW_SHOWNORMAL, WM_CLOSE,
 };
 
+use crate::limits::{Change, Limiter, ProcessUsage};
 use crate::{AppUsage, MemorySnapshot, MemorySource, StartupEntry, MIB};
 
 /// Background this long before an app counts as idle.
@@ -185,6 +190,12 @@ pub struct WindowsSource {
     own_pid: u32,
     /// App name to process IDs, from the latest scan.
     groups: HashMap<String, Vec<u32>>,
+    /// Memory of each process in `groups`, from the latest scan.
+    memory: HashMap<u32, ProcessMemory>,
+    /// One per app with a RAM limit.
+    limiters: HashMap<String, Limiter>,
+    /// Processes we capped, with their original (min, max) working set.
+    capped: HashMap<u32, (usize, usize)>,
     last_foreground: HashMap<String, Instant>,
     /// Processes whose memory priority we lowered, with the original value.
     lowered: HashMap<u32, u32>,
@@ -204,10 +215,16 @@ impl Default for WindowsSource {
 
 impl WindowsSource {
     pub fn new() -> Self {
+        // Needed to give processes a working set limit above Windows' default.
+        // Standard accounts hold it; it just may not be switched on.
+        let _ = enable_privilege("SeIncreaseWorkingSetPrivilege");
         Self {
             started: Instant::now(),
             own_pid: std::process::id(),
             groups: HashMap::new(),
+            memory: HashMap::new(),
+            limiters: HashMap::new(),
+            capped: HashMap::new(),
             last_foreground: HashMap::new(),
             lowered: HashMap::new(),
             compressed: 0,
@@ -272,6 +289,7 @@ impl MemorySource for WindowsSource {
         let mut totals: HashMap<String, u64> = HashMap::new();
         let mut foreground_app = None;
         self.groups.clear();
+        self.memory.clear();
         self.running.clear();
 
         for process in list_processes() {
@@ -290,6 +308,7 @@ impl MemorySource for WindowsSource {
                 foreground_app = Some(name.clone());
             }
             self.groups.entry(name).or_default().push(process.pid);
+            self.memory.insert(process.pid, memory);
         }
 
         if let Some(name) = &foreground_app {
@@ -388,6 +407,49 @@ impl MemorySource for WindowsSource {
         for (pid, original) in self.lowered.drain() {
             set_memory_priority(pid, original);
         }
+        self.limiters.clear();
+        for pid in self.capped.keys().copied().collect::<Vec<_>>() {
+            self.clear_limit(pid);
+        }
+    }
+
+    fn enforce_limits(&mut self, caps: &BTreeMap<String, u64>) -> Vec<String> {
+        let removed: Vec<String> = self.limiters.keys().filter(|name| !caps.contains_key(*name)).cloned().collect();
+        for name in removed {
+            if let Some(mut limiter) = self.limiters.remove(&name) {
+                for pid in limiter.release() {
+                    self.clear_limit(pid);
+                }
+            }
+        }
+        // Processes that exited take their limits with them.
+        self.capped.retain(|pid, _| self.memory.contains_key(pid));
+
+        let mut refused = Vec::new();
+        for (name, &cap) in caps {
+            let processes: Vec<ProcessUsage> = self
+                .groups
+                .get(name)
+                .into_iter()
+                .flatten()
+                .filter_map(|pid| {
+                    let memory = self.memory.get(pid)?;
+                    Some(ProcessUsage { pid: *pid, working_set: memory.working_set, private: memory.private })
+                })
+                .collect();
+            let changes = self.limiters.entry(name.clone()).or_default().plan(cap, &processes);
+            let mut failed = false;
+            for change in changes {
+                match change {
+                    Change::Set { pid, max } => failed |= !self.set_limit(pid, max),
+                    Change::Clear { pid } => self.clear_limit(pid),
+                }
+            }
+            if failed {
+                refused.push(name.clone());
+            }
+        }
+        refused
     }
 
     fn foreground_game(&mut self) -> Option<String> {
@@ -483,6 +545,40 @@ fn top_level_windows(pids: &[u32]) -> Vec<HWND> {
 }
 
 impl WindowsSource {
+    /// Caps a process's working set at `max` bytes. Windows moves anything
+    /// over it to the standby list or page file; nothing is lost.
+    fn set_limit(&mut self, pid: u32, max: u64) -> bool {
+        let Some(process) = Handle::open_process(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, pid) else {
+            return false;
+        };
+        let original = match self.capped.get(&pid) {
+            Some(&original) => original,
+            None => {
+                let (mut min, mut max, mut flags) = (0, 0, 0);
+                if unsafe { GetProcessWorkingSetSizeEx(process.0, &mut min, &mut max, &mut flags) } == 0 {
+                    return false;
+                }
+                (min, max)
+            }
+        };
+        let max = usize::try_from(max).unwrap_or(usize::MAX);
+        let flags = QUOTA_LIMITS_HARDWS_MAX_ENABLE | QUOTA_LIMITS_HARDWS_MIN_DISABLE;
+        let ok = unsafe { SetProcessWorkingSetSizeEx(process.0, original.0.min(max / 2), max, flags) } != 0;
+        if ok {
+            self.capped.entry(pid).or_insert(original);
+        }
+        ok
+    }
+
+    /// Puts a capped process back to how Windows had it.
+    fn clear_limit(&mut self, pid: u32) {
+        let Some((min, max)) = self.capped.remove(&pid) else { return };
+        if let Some(process) = Handle::open_process(PROCESS_SET_QUOTA, pid) {
+            let flags = QUOTA_LIMITS_HARDWS_MAX_DISABLE | QUOTA_LIMITS_HARDWS_MIN_DISABLE;
+            unsafe { SetProcessWorkingSetSizeEx(process.0, min, max, flags) };
+        }
+    }
+
     fn pids(&self, app: &str) -> Result<Vec<u32>, String> {
         self.groups
             .get(app)

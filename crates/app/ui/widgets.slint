@@ -36,6 +36,12 @@ export struct AppRow {
     closing: bool,
     // Ignored the close request; offer force quit instead.
     can-force: bool,
+    // RAM limit chip such as "≤ 2 GB"; empty when the app has none.
+    limit: string,
+    limited: bool,
+    // Slider start (the limit, or a suggestion) and end, in tenths of a GB.
+    limit-tenths: int,
+    limit-max: int,
 }
 
 component Light inherits Rectangle {
@@ -359,13 +365,18 @@ export component NeuSlider inherits Rectangle {
     accessible-value-minimum: root.minimum;
     accessible-value-maximum: root.maximum;
     accessible-value-step: root.step;
-    accessible-action-set-value(v) => { root.value = clamp(v.to-float(), root.minimum, root.maximum); }
+    accessible-action-set-value(v) => { root.set-value(v.to-float()); }
     accessible-action-increment => { root.value = min(root.value + root.step, root.maximum); }
     accessible-action-decrement => { root.value = max(root.value - root.step, root.minimum); }
 
-    function set-from(x: length) {
-        let raw = clamp((x - root.knob / 2) / (root.width - root.knob), 0, 1) * (root.maximum - root.minimum);
+    // Snaps to the nearest step.
+    function set-value(v: float) {
+        let raw = clamp(v, root.minimum, root.maximum) - root.minimum;
         root.value = root.minimum + round(raw / root.step) * root.step;
+    }
+
+    function set-from(x: length) {
+        root.set-value(root.minimum + clamp((x - root.knob / 2) / (root.width - root.knob), 0, 1) * (root.maximum - root.minimum));
     }
 
     height: 26px;
@@ -411,12 +422,25 @@ export component AppRowView inherits Rectangle {
     in property <AppRow> app;
     // Shows the "Close this app?" question in place of the normal row.
     in property <bool> confirming;
+    // Shows the RAM limit slider in place of the normal row.
+    in property <bool> editing-limit;
+    // Slider value and end, in tenths of a GB. Kept by the window, so the
+    // once-a-second refresh doesn't move the knob under the pointer.
+    in-out property <int> limit-value;
+    in property <int> limit-max;
     callback ask-close();
     callback cancel-close();
     callback confirm-close();
     callback force-quit();
+    callback edit-limit();
+    callback save-limit();
+    callback remove-limit();
+    callback cancel-limit();
 
-    property <string> chip: root.app.closing ? "closing…" : root.app.growth != "" ? root.app.growth : root.app.idle;
+    property <string> chip: root.app.closing ? "closing…"
+        : root.app.growth != "" ? root.app.growth
+        : root.app.limit != "" ? root.app.limit
+        : root.app.idle;
     property <bool> chip-warn: !root.app.closing && root.app.growth != "";
 
     height: 46px;
@@ -476,7 +500,72 @@ export component AppRowView inherits Rectangle {
             }
         }
 
-        if !root.confirming : HorizontalLayout {
+        if root.editing-limit && !root.confirming : HorizontalLayout {
+            spacing: 6px;
+
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 1px;
+                HorizontalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: "Max \{root.limit-value / 10} GB";
+                        font-size: 12px;
+                        color: Palette.ink;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "lower is slower";
+                        horizontal-stretch: 1;
+                        font-size: 10px;
+                        color: Palette.ink-faint;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+                NeuSlider {
+                    minimum: 5;
+                    maximum: root.limit-max;
+                    step: 5;
+                    value <=> root.limit-value;
+                    accessible-label: "Most RAM " + root.app.name + " can use";
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    height: 30px;
+                    depth: 3px;
+                    text: root.app.limited ? "Off" : "Cancel";
+                    label: root.app.limited ? "Remove the limit on " + root.app.name : "Cancel";
+                    font-size: 12px;
+                    clicked => {
+                        if (root.app.limited) {
+                            root.remove-limit();
+                        } else {
+                            root.cancel-limit();
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    height: 30px;
+                    depth: 3px;
+                    text: "Save";
+                    label: "Limit " + root.app.name + " to " + (root.limit-value / 10) + " GB";
+                    font-size: 12px;
+                    clicked => { root.save-limit(); }
+                }
+            }
+        }
+
+        if !root.confirming && !root.editing-limit : HorizontalLayout {
             spacing: 8px;
 
             VerticalLayout {
@@ -539,6 +628,20 @@ export component AppRowView inherits Rectangle {
                     warn: true;
                     label: "Force quit " + root.app.name;
                     clicked => { root.force-quit(); }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    width: 32px;
+                    height: 32px;
+                    depth: 3px;
+                    icon: Icons.cap;
+                    icon-size: 14px;
+                    active: root.app.limited;
+                    label: root.app.limited ? "Change the RAM limit on " + root.app.name : "Limit the RAM " + root.app.name + " can use";
+                    clicked => { root.edit-limit(); }
                 }
             }
 

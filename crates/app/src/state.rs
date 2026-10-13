@@ -14,7 +14,7 @@ use ram_core::history::LongHistory;
 use ram_core::settings::Settings;
 use ram_core::trend::GrowthTracker;
 use ram_core::{
-    format_size, trim_background, trim_idle, AppUsage, MemorySnapshot, MemorySource, StartupEntry,
+    format_size, trim_background, trim_idle, AppUsage, MemorySnapshot, MemorySource, StartupEntry, MIB,
 };
 use slint::VecModel;
 
@@ -22,7 +22,7 @@ use crate::{AppRow, FindingRow, GamingRow, StartupRow};
 
 /// Samples in the one-minute history (one per second).
 pub const RECENT_LEN: usize = 60;
-pub const AUTO_COOLDOWN: Duration = Duration::from_secs(5 * 60);
+const AUTO_STATUS_MIN: u64 = 25 * MIB;
 const STATUS_DURATION: Duration = Duration::from_secs(4);
 const GROWTH_WINDOW: Duration = Duration::from_secs(60);
 
@@ -42,6 +42,8 @@ pub struct State {
     /// Close-when-gaming apps to force quit if they ignore the close request.
     force_if_ignored: HashSet<String>,
     alerts: AlertRules,
+    /// Limited apps Windows refused, so the message shows once.
+    refused_limits: HashSet<String>,
     /// New alerts, waiting to be shown as notifications.
     pub pending_alerts: Vec<Alert>,
     pub startup: Vec<StartupEntry>,
@@ -58,7 +60,10 @@ pub struct State {
 
 impl State {
     pub fn new(mut source: Box<dyn MemorySource>, settings: Settings) -> Self {
-        let mut auto = AutoClear::new(settings.auto_threshold as f32 / 100.0, AUTO_COOLDOWN);
+        let mut auto = AutoClear::new(
+            settings.auto_threshold as f32 / 100.0,
+            Duration::from_secs(settings.auto_interval.into()),
+        );
         auto.enabled = settings.auto_clear;
         Self {
             snap: source.snapshot(),
@@ -74,6 +79,7 @@ impl State {
             closing: CloseTracker::default(),
             force_if_ignored: HashSet::new(),
             alerts: AlertRules::default(),
+            refused_limits: HashSet::new(),
             pending_alerts: Vec::new(),
             startup: Vec::new(),
             findings: Vec::new(),
@@ -108,6 +114,7 @@ impl State {
     /// Everything that happens once a second.
     pub fn tick(&mut self) {
         self.poll(true);
+        self.enforce_limits();
         self.update_auto_game();
         self.tick_game_mode();
         self.force_ignored_closes();
@@ -143,7 +150,10 @@ impl State {
         }
         let (freed, _) = trim_idle(self.source.as_mut(), &self.apps);
         self.auto.record_run(now, freed);
-        self.set_status(format!("Auto-cleared {} at {:.0}%", format_size(freed), ratio * 100.0));
+        // Short intervals run constantly; only mention runs that did something.
+        if freed >= AUTO_STATUS_MIN {
+            self.set_status(format!("Auto-cleared {} at {:.0}%", format_size(freed), ratio * 100.0));
+        }
         self.poll(false);
     }
 
@@ -266,6 +276,31 @@ impl State {
         match self.source.force_quit(name) {
             Ok(()) => self.closing.forced(name, Instant::now()),
             Err(err) => self.set_status(err),
+        }
+    }
+
+    /// Keeps an app under `cap` bytes, or lifts its limit with `None`.
+    pub fn set_limit(&mut self, name: &str, cap: Option<u64>) {
+        self.refused_limits.remove(name);
+        match cap {
+            Some(bytes) => {
+                self.settings.limits.insert(name.to_string(), bytes);
+                self.set_status(format!("{name} now stays under {}", crate::view::short_gb(bytes)));
+            }
+            None => {
+                self.settings.limits.remove(name);
+                self.set_status(format!("{name} has no limit now"));
+            }
+        }
+        self.save_settings();
+        self.enforce_limits();
+    }
+
+    fn enforce_limits(&mut self) {
+        for name in self.source.enforce_limits(&self.settings.limits) {
+            if self.refused_limits.insert(name.clone()) {
+                self.set_status(format!("Windows didn't allow limiting {name}"));
+            }
         }
     }
 

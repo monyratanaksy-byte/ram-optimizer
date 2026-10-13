@@ -50,6 +50,8 @@ export component AppWindow inherits Window {
     in property <bool> auto-warn;
     in-out property <bool> auto-enabled: true;
     in-out property <int> auto-threshold: 80;
+    // Index into the interval options (5s ... 5m) below.
+    in-out property <int> auto-interval: 5;
 
     in-out property <bool> game-mode: false;
 
@@ -69,6 +71,8 @@ export component AppWindow inherits Window {
     callback start-drag();
     callback quit-app(string);
     callback force-quit-app(string);
+    // RAM limit in tenths of a GB; 0 removes it.
+    callback set-limit(string, int);
     callback optimize();
     callback game-mode-toggled(bool);
     // Something in settings changed; the Rust side reads and saves them all.
@@ -91,6 +95,10 @@ export component AppWindow inherits Window {
     // App whose row is asking "Close this app?". Keyed by name, not row,
     // because rows re-sort every second.
     property <string> confirming-app;
+    // App whose row shows the RAM limit slider, and the slider's state.
+    property <string> limiting-app;
+    property <int> limit-draft;
+    property <int> limit-draft-max;
 
     function toggle-panel(p: int) {
         if (root.panel == p) {
@@ -348,13 +356,34 @@ export component AppWindow inherits Window {
                         for app in root.apps : AppRowView {
                             app: app;
                             confirming: root.confirming-app == app.name;
-                            ask-close => { root.confirming-app = app.name; }
+                            editing-limit: root.limiting-app == app.name;
+                            limit-value <=> root.limit-draft;
+                            limit-max: root.limit-draft-max;
+                            ask-close => {
+                                root.limiting-app = "";
+                                root.confirming-app = app.name;
+                            }
                             cancel-close => { root.confirming-app = ""; }
                             confirm-close => {
                                 root.confirming-app = "";
                                 root.quit-app(app.name);
                             }
                             force-quit => { root.force-quit-app(app.name); }
+                            edit-limit => {
+                                root.confirming-app = "";
+                                root.limit-draft = app.limit-tenths;
+                                root.limit-draft-max = app.limit-max;
+                                root.limiting-app = app.name;
+                            }
+                            cancel-limit => { root.limiting-app = ""; }
+                            save-limit => {
+                                root.limiting-app = "";
+                                root.set-limit(app.name, root.limit-draft);
+                            }
+                            remove-limit => {
+                                root.limiting-app = "";
+                                root.set-limit(app.name, 0);
+                            }
                         }
                     }
                 }
@@ -420,6 +449,26 @@ export component AppWindow inherits Window {
                             text: "\{mark}";
                             font-size: 10px;
                             color: Palette.ink-faint;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: "Every";
+                        horizontal-stretch: 1;
+                        font-size: 13px;
+                        color: Palette.ink;
+                        vertical-alignment: center;
+                    }
+                    Segmented {
+                        width: 250px;
+                        options: ["5s", "10s", "15s", "30s", "1m", "5m"];
+                        selected: root.auto-interval;
+                        changed(i) => {
+                            root.auto-interval = i;
+                            root.settings-changed();
                         }
                     }
                 }

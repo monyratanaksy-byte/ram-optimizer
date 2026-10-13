@@ -1,5 +1,6 @@
 //! User settings, saved as simple `key=value` lines.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -34,6 +35,8 @@ pub struct Settings {
     pub auto_clear: bool,
     /// Percent of RAM in use that triggers auto-clear.
     pub auto_threshold: u8,
+    /// Seconds between auto-clear runs while RAM stays over the threshold.
+    pub auto_interval: u32,
     pub start_with_windows: bool,
     pub alerts: bool,
     pub theme: Theme,
@@ -41,6 +44,8 @@ pub struct Settings {
     pub auto_game_mode: bool,
     /// Apps game mode closes when it turns on.
     pub close_when_gaming: Vec<String>,
+    /// Per-app RAM caps in bytes.
+    pub limits: BTreeMap<String, u64>,
 }
 
 impl Default for Settings {
@@ -48,11 +53,13 @@ impl Default for Settings {
         Self {
             auto_clear: true,
             auto_threshold: 80,
+            auto_interval: 300,
             start_with_windows: true,
             alerts: true,
             theme: Theme::System,
             auto_game_mode: true,
             close_when_gaming: Vec::new(),
+            limits: BTreeMap::new(),
         }
     }
 }
@@ -100,6 +107,11 @@ impl Settings {
                         settings.auto_threshold = percent.clamp(30, 95);
                     }
                 }
+                "auto_interval" => {
+                    if let Ok(seconds) = value.parse::<u32>() {
+                        settings.auto_interval = crate::auto::nearest_interval(seconds);
+                    }
+                }
                 "start_with_windows" => settings.start_with_windows = flag,
                 "alerts" => settings.alerts = flag,
                 "theme" => settings.theme = Theme::from_index(value.parse().unwrap_or(0)),
@@ -112,6 +124,18 @@ impl Settings {
                         .map(str::to_string)
                         .collect();
                 }
+                // "Chrome:2048|Discord:512", in MB.
+                "limits" => {
+                    settings.limits = value
+                        .split('|')
+                        .filter_map(|entry| {
+                            let (name, mb) = entry.rsplit_once(':')?;
+                            let mb = mb.trim().parse::<u64>().ok().filter(|&mb| mb > 0)?;
+                            Some((name.trim().to_string(), mb * crate::MIB))
+                        })
+                        .filter(|(name, _)| !name.is_empty())
+                        .collect();
+                }
                 _ => {}
             }
         }
@@ -119,15 +143,22 @@ impl Settings {
     }
 
     pub fn to_text(&self) -> String {
+        let limits: Vec<String> = self
+            .limits
+            .iter()
+            .map(|(name, bytes)| format!("{name}:{}", bytes / crate::MIB))
+            .collect();
         format!(
-            "auto_clear={}\nauto_threshold={}\nstart_with_windows={}\nalerts={}\ntheme={}\nauto_game_mode={}\nclose_when_gaming={}\n",
+            "auto_clear={}\nauto_threshold={}\nauto_interval={}\nstart_with_windows={}\nalerts={}\ntheme={}\nauto_game_mode={}\nclose_when_gaming={}\nlimits={}\n",
             self.auto_clear,
             self.auto_threshold,
+            self.auto_interval,
             self.start_with_windows,
             self.alerts,
             self.theme.index(),
             self.auto_game_mode,
             self.close_when_gaming.join("|"),
+            limits.join("|"),
         )
     }
 }
@@ -141,11 +172,13 @@ mod tests {
         let settings = Settings {
             auto_clear: false,
             auto_threshold: 65,
+            auto_interval: 15,
             start_with_windows: false,
             alerts: false,
             theme: Theme::Dark,
             auto_game_mode: false,
             close_when_gaming: vec!["Chrome".into(), "Spotify".into()],
+            limits: BTreeMap::from([("Chrome".into(), 2048 * crate::MIB), ("Discord".into(), 512 * crate::MIB)]),
         };
         assert_eq!(Settings::parse(&settings.to_text()), settings);
     }
@@ -156,6 +189,12 @@ mod tests {
         assert_eq!(settings.auto_threshold, 80);
         assert!(!settings.alerts);
         assert!(settings.auto_clear);
+    }
+
+    #[test]
+    fn skips_broken_limits() {
+        let settings = Settings::parse("limits=Chrome:2048|Bad|Zero:0|:5|Slack:abc");
+        assert_eq!(settings.limits, BTreeMap::from([("Chrome".into(), 2048 * crate::MIB)]));
     }
 
     #[test]

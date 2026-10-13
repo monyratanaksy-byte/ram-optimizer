@@ -1,6 +1,6 @@
 //! Fake but lively data, so the UI can be built and previewed on any OS.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::{AppUsage, MemorySnapshot, MemorySource, StartupEntry, GIB, MIB};
@@ -221,5 +221,18 @@ impl MemorySource for MockSource {
 
     fn restore_all(&mut self) {
         self.low_priority.clear();
+    }
+
+    fn enforce_limits(&mut self, caps: &BTreeMap<String, u64>) -> Vec<String> {
+        for app in &mut self.apps {
+            let Some(&cap) = caps.get(&app.usage.name) else { continue };
+            // Like the real limit, the app settles just under its cap.
+            let ceiling = cap as f64 * 0.97;
+            if app.base > ceiling {
+                app.base = ceiling;
+                app.usage.bytes = app.usage.bytes.min(ceiling as u64);
+            }
+        }
+        Vec::new()
     }
 }

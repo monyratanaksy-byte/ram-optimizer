@@ -11,9 +11,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
+use ram_core::auto::INTERVALS;
 use ram_core::mock::MockSource;
 use ram_core::settings::{Settings, Theme};
-use ram_core::MemorySource;
+use ram_core::{MemorySource, GIB};
 use slint::winit_030::WinitWindowAccessor;
 use slint::{ComponentHandle, ModelRc, SharedString};
 
@@ -303,6 +304,18 @@ fn wire_actions(ui: &AppWindow, state: &Rc<RefCell<State>>) {
     };
     ui.on_quit_app(with_name(State::close));
     ui.on_force_quit_app(with_name(State::force_quit));
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_set_limit(move |name, tenths| {
+            let Some(ui) = ui_weak.upgrade() else { return };
+            let mut state = state.borrow_mut();
+            let cap = (tenths > 0).then(|| tenths as u64 * GIB / 10);
+            state.set_limit(&name, cap);
+            state.poll(false);
+            view::render(&ui, &mut state);
+        });
+    }
 
     {
         let ui_weak = ui.as_weak();
@@ -329,6 +342,7 @@ fn wire_settings(ui: &AppWindow, state: &Rc<RefCell<State>>, demo: bool) {
             read_settings_from_ui(&ui, &mut state.settings);
             state.auto.enabled = state.settings.auto_clear;
             state.auto.threshold = state.settings.auto_threshold as f32 / 100.0;
+            state.auto.cooldown = Duration::from_secs(state.settings.auto_interval.into());
             if !demo && state.settings.start_with_windows != before {
                 set_autostart(state.settings.start_with_windows);
             }
@@ -363,6 +377,8 @@ fn wire_settings(ui: &AppWindow, state: &Rc<RefCell<State>>, demo: bool) {
 fn apply_settings_to_ui(ui: &AppWindow, settings: &Settings) {
     ui.set_auto_enabled(settings.auto_clear);
     ui.set_auto_threshold(settings.auto_threshold.into());
+    let interval = INTERVALS.iter().position(|&s| s == settings.auto_interval).unwrap_or(INTERVALS.len() - 1);
+    ui.set_auto_interval(interval as i32);
     ui.set_start_with_windows(settings.start_with_windows);
     ui.set_alerts_enabled(settings.alerts);
     ui.set_auto_game_mode(settings.auto_game_mode);
@@ -372,6 +388,10 @@ fn apply_settings_to_ui(ui: &AppWindow, settings: &Settings) {
 fn read_settings_from_ui(ui: &AppWindow, settings: &mut Settings) {
     settings.auto_clear = ui.get_auto_enabled();
     settings.auto_threshold = ui.get_auto_threshold().clamp(30, 95) as u8;
+    settings.auto_interval = usize::try_from(ui.get_auto_interval())
+        .ok()
+        .and_then(|i| INTERVALS.get(i).copied())
+        .unwrap_or(settings.auto_interval);
     settings.start_with_windows = ui.get_start_with_windows();
     settings.alerts = ui.get_alerts_enabled();
     settings.auto_game_mode = ui.get_auto_game_mode();

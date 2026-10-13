@@ -9,6 +9,7 @@ pub mod checkup;
 pub mod closing;
 pub mod game;
 pub mod history;
+pub mod limits;
 pub mod mock;
 pub mod settings;
 pub mod smbios;
@@ -16,6 +17,8 @@ pub mod trend;
 pub mod update;
 #[cfg(windows)]
 pub mod win;
+
+use std::collections::BTreeMap;
 
 pub const MIB: u64 = 1024 * 1024;
 pub const GIB: u64 = 1024 * MIB;
@@ -130,6 +133,12 @@ pub trait MemorySource {
     /// Turns a startup entry on or off the same way Task Manager does.
     fn set_startup_enabled(&mut self, _id: &str, _enabled: bool) -> Result<(), String> {
         Err("Startup apps can only be changed on Windows".into())
+    }
+    /// Keeps each app in `caps` under its cap in bytes (see [`limits`]) and
+    /// lifts the limits of apps no longer listed. Call it every second, so
+    /// new processes get limited too. Returns the apps Windows wouldn't limit.
+    fn enforce_limits(&mut self, _caps: &BTreeMap<String, u64>) -> Vec<String> {
+        Vec::new()
     }
 }
 
