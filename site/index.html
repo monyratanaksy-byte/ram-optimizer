@@ -66,15 +66,20 @@
       </div>
 
       <div class="hero-demo reveal" id="demo-wrap">
-        <p class="try-it" aria-hidden="true">Try it</p>
+        <div class="try-it" aria-hidden="true">
+          <span class="try-pill"><span class="pulse-dot"></span>Live demo · Try it</span>
+          <svg class="try-arrow" viewBox="0 0 64 48"><path d="M58 4C40 6 22 14 12 38M4 28l8 11 11-6"/></svg>
+        </div>
         <!-- A working copy of the app's window, in HTML -->
         <div class="app" id="app" role="group" aria-label="Interactive preview of the RAM Optimizer window">
           <div class="app-top">
             <div class="titlebar">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="title">RAM Optimizer <span class="version-label">v0.2</span></span>
-              <span class="sliders" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 8h8.3M17.7 8H20M4 16h2.3M11.7 16H20"/><circle cx="15" cy="8" r="2.7"/><circle cx="9" cy="16" r="2.7"/></svg>
+              <span class="title">RAM Optimizer <span class="version-label">v0.4.0</span></span>
+              <span class="sliders">
+                <button class="icon-btn" data-panel="settings" type="button" aria-label="Settings" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h8.3M17.7 8H20M4 16h2.3M11.7 16H20"/><circle cx="15" cy="8" r="2.7"/><circle cx="9" cy="16" r="2.7"/></svg>
+                </button>
               </span>
             </div>
 
@@ -125,8 +130,10 @@
           <div class="panel" id="panel" aria-live="polite">
             <div class="panel-inner" id="panel-inner"></div>
           </div>
+          <svg class="tap-hand" id="tap-hand" viewBox="0 0 32 32" aria-hidden="true"><path d="M12 15V6.5a2 2 0 0 1 4 0V14m0-2.5a2 2 0 0 1 4 0V15m0-2a2 2 0 0 1 4 0v6c0 5-3 9-8 9h-1c-3 0-5-1.5-6.5-4L6 19.5a2 2 0 0 1 3.2-2.4L12 20"/></svg>
         </div>
         <div class="demo-shadow" aria-hidden="true"></div>
+        <p class="demo-caption">A working copy of the app. Click any button.</p>
       </div>
     </section>
 
