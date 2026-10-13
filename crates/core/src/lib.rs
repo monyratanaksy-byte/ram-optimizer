@@ -11,6 +11,7 @@ pub mod game;
 pub mod history;
 pub mod mock;
 pub mod settings;
+pub mod smbios;
 pub mod trend;
 pub mod update;
 #[cfg(windows)]

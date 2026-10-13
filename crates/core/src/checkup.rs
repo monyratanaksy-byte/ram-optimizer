@@ -1,7 +1,7 @@
 //! RAM check-up: turns facts about the memory setup into findings.
 //!
-//! The facts come as `key|value|...` lines (on Windows, from a PowerShell
-//! query of WMI), so the rules here can be tested anywhere.
+//! The facts come as `key|value|...` lines (on Windows, read from the
+//! firmware tables and registry), so the rules here can be tested anywhere.
 
 use crate::{format_size, to_gb, MemorySnapshot, GIB};
 

@@ -1,0 +1,30 @@
+# Builds the Windows .exe with Microsoft's compiler (MSVC) on a real Windows
+# machine and runs every test there. Antivirus tools trust MSVC builds more
+# than cross-compiled MinGW ones. scripts/release.sh downloads the result,
+# signs it locally and publishes the release.
+name: Windows build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+      - name: Build
+        run: cargo build --release -p ram-optimizer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RAMOptimizer
+          path: target/release/ram-optimizer.exe
+          if-no-files-found: error

@@ -3,3 +3,8 @@
 linker = "x86_64-w64-mingw32-gcc"
 # Link the C runtime statically so the .exe runs without extra DLLs.
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Windows builds with Microsoft's toolchain (GitHub Actions): also link the C
+# runtime statically, so the .exe needs no Visual C++ redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

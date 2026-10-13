@@ -21,16 +21,29 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub fn set_enabled(enabled: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let run = RegKey::create(Root::CurrentUser, RUN_KEY)?;
+    let marker = marker_path();
     if !enabled {
         run.delete(OWN_ENTRY);
+        if let Some(marker) = &marker {
+            let _ = std::fs::remove_file(marker);
+        }
         if task_exists() {
             schtasks(&["/Delete", "/TN", OWN_ENTRY, "/F"]);
         }
         return Ok(());
     }
     if WindowsSource::is_elevated() {
+        // Already registered for this exact .exe: nothing to do, and no
+        // need to start schtasks.exe on every launch.
+        let registered = marker.as_ref().and_then(|m| std::fs::read_to_string(m).ok());
+        if registered.as_deref() == Some(exe.to_string_lossy().as_ref()) {
+            return Ok(());
+        }
         create_task(&exe)?;
         run.delete(OWN_ENTRY);
+        if let Some(marker) = &marker {
+            let _ = std::fs::write(marker, exe.to_string_lossy().as_bytes());
+        }
         return Ok(());
     }
     if task_exists() {
@@ -41,6 +54,12 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
         OWN_ENTRY,
         &format!("\"{}\" {STARTUP_ARG} --no-elevate", exe.display()),
     )
+}
+
+/// Remembers which .exe the scheduled task was registered for.
+fn marker_path() -> Option<std::path::PathBuf> {
+    let appdata = std::env::var_os("APPDATA")?;
+    Some(Path::new(&appdata).join("RAM Optimizer").join("autostart-task.txt"))
 }
 
 fn task_exists() -> bool {
