@@ -1,7 +1,8 @@
 //! Automatic updates from GitHub Releases.
 //!
-//! A background thread asks GitHub for the latest release every few hours.
-//! If it's newer, it downloads `RAMOptimizer.exe` and its `.sig`, and keeps
+//! A background thread asks GitHub for the latest release when the app
+//! starts, whenever the window is opened, and every few hours. If it's
+//! newer, it downloads `RAMOptimizer.exe` and its `.sig`, and keeps
 //! the download only if the signature matches the public key built into the
 //! app. Installing swaps the files and restarts the app.
 //!
@@ -9,8 +10,8 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::time::{Duration, Instant};
 
 use ram_core::update;
 
@@ -19,8 +20,12 @@ pub const REPO: &str = "monyratanaksy-byte/ram-optimizer";
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PUBLIC_KEY: &str = include_str!("../update-key.pub");
 const EXE_ASSET: &str = "RAMOptimizer.exe";
-const FIRST_CHECK_AFTER: Duration = Duration::from_secs(30);
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+/// Offline (or GitHub unreachable): try again this soon.
+const RETRY_OFFLINE: Duration = Duration::from_secs(60);
+/// Opening the window often shouldn't hammer GitHub, which allows 60
+/// unauthenticated requests an hour.
+const MIN_GAP: Duration = Duration::from_secs(5 * 60);
 const MAX_DOWNLOAD: u64 = 64 * 1024 * 1024;
 
 /// A verified update, saved next to the running executable.
@@ -29,23 +34,81 @@ pub struct ReadyUpdate {
     pub path: PathBuf,
 }
 
-/// Checks shortly after startup, then every few hours, until an update is
-/// downloaded and verified.
-pub fn start_checking(sender: Sender<ReadyUpdate>) {
-    std::thread::spawn(move || {
-        std::thread::sleep(FIRST_CHECK_AFTER);
-        loop {
-            match check_and_download() {
-                Ok(Some(ready)) => {
-                    let _ = sender.send(ready);
-                    return;
-                }
-                Ok(None) => {}
-                Err(err) => crate::log_error(&format!("update check: {err}")),
-            }
-            std::thread::sleep(CHECK_EVERY);
+/// Handle for asking the update thread to check right away.
+#[derive(Clone)]
+pub struct Updater(Sender<()>);
+
+impl Updater {
+    /// An updater that never checks (demo mode, non-Windows).
+    pub fn disabled() -> Self {
+        Self(mpsc::channel().0)
+    }
+
+    /// Checks now, unless the last successful check was moments ago.
+    pub fn check_now(&self) {
+        let _ = self.0.send(());
+    }
+}
+
+/// Checks right away, then on request, every few hours, and every minute
+/// while offline, until an update is downloaded and verified.
+pub fn start(ready: Sender<ReadyUpdate>) -> Updater {
+    let (trigger, requests) = mpsc::channel();
+    std::thread::spawn(move || schedule(&requests, &ready, &TIMING, check_and_download));
+    Updater(trigger)
+}
+
+struct Timing {
+    every: Duration,
+    retry_offline: Duration,
+    min_gap: Duration,
+}
+
+const TIMING: Timing = Timing {
+    every: CHECK_EVERY,
+    retry_offline: RETRY_OFFLINE,
+    min_gap: MIN_GAP,
+};
+
+/// The update thread's loop: runs `check` now, then whenever asked (at most
+/// once per `min_gap` after a successful check), every `every`, and every
+/// `retry_offline` while checks fail. Returns once an update is ready or the
+/// app is gone.
+fn schedule(
+    requests: &Receiver<()>,
+    ready: &Sender<ReadyUpdate>,
+    timing: &Timing,
+    mut check: impl FnMut() -> Result<Option<ReadyUpdate>, String>,
+) {
+    let mut next_check = Instant::now();
+    let mut last_success: Option<Instant> = None;
+    let mut offline = false;
+    loop {
+        match requests.recv_timeout(next_check.saturating_duration_since(Instant::now())) {
+            Ok(()) if last_success.is_some_and(|at| at.elapsed() < timing.min_gap) => continue,
+            Ok(()) | Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
         }
-    });
+        match check() {
+            Ok(Some(update)) => {
+                let _ = ready.send(update);
+                return;
+            }
+            Ok(None) => {
+                offline = false;
+                last_success = Some(Instant::now());
+                next_check = Instant::now() + timing.every;
+            }
+            Err(err) => {
+                // Log once per outage, not every minute.
+                if !offline {
+                    crate::log_error(&format!("update check failed, retrying every minute: {err}"));
+                }
+                offline = true;
+                next_check = Instant::now() + timing.retry_offline;
+            }
+        }
+    }
 }
 
 fn check_and_download() -> Result<Option<ReadyUpdate>, String> {
@@ -134,5 +197,69 @@ pub fn clean_up() {
         if let Ok(path) = sibling(extension) {
             let _ = std::fs::remove_file(path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    const HOUR: Duration = Duration::from_secs(3600);
+    const SETTLE: Duration = Duration::from_millis(150);
+
+    /// Runs the scheduler on a thread with `results` as successive check
+    /// outcomes (`true` = online, no update; `false` = offline). Returns the
+    /// trigger and the number of checks made so far.
+    fn run(timing: Timing, results: Vec<bool>) -> (Sender<()>, Arc<AtomicUsize>) {
+        let (trigger, requests) = mpsc::channel();
+        let (ready, _updates) = mpsc::channel();
+        let checks = Arc::new(AtomicUsize::new(0));
+        let counter = checks.clone();
+        std::thread::spawn(move || {
+            let _keep = _updates;
+            schedule(&requests, &ready, &timing, move || {
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                if results.get(n).copied().unwrap_or(true) { Ok(None) } else { Err("offline".into()) }
+            });
+        });
+        std::thread::sleep(SETTLE);
+        (trigger, checks)
+    }
+
+    #[test]
+    fn checks_at_start() {
+        let (_trigger, checks) = run(Timing { every: HOUR, retry_offline: HOUR, min_gap: HOUR }, vec![true]);
+        assert_eq!(checks.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn opening_the_window_checks_again_but_not_too_often() {
+        let (trigger, checks) = run(Timing { every: HOUR, retry_offline: HOUR, min_gap: HOUR }, vec![true]);
+        trigger.send(()).unwrap();
+        std::thread::sleep(SETTLE);
+        assert_eq!(checks.load(Ordering::SeqCst), 1, "within the minimum gap");
+
+        let (trigger, checks) = run(Timing { every: HOUR, retry_offline: HOUR, min_gap: Duration::ZERO }, vec![true]);
+        trigger.send(()).unwrap();
+        std::thread::sleep(SETTLE);
+        assert_eq!(checks.load(Ordering::SeqCst), 2, "after the minimum gap");
+    }
+
+    #[test]
+    fn retries_while_offline_until_connected() {
+        let timing = Timing { every: HOUR, retry_offline: Duration::from_millis(40), min_gap: HOUR };
+        let (_trigger, checks) = run(timing, vec![false, false, true]);
+        std::thread::sleep(SETTLE);
+        assert_eq!(checks.load(Ordering::SeqCst), 3, "two failed tries, then success, then waits");
+    }
+
+    #[test]
+    fn opening_the_window_while_offline_retries_at_once() {
+        let (trigger, checks) = run(Timing { every: HOUR, retry_offline: HOUR, min_gap: HOUR }, vec![false, true]);
+        trigger.send(()).unwrap();
+        std::thread::sleep(SETTLE);
+        assert_eq!(checks.load(Ordering::SeqCst), 2);
     }
 }

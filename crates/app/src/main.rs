@@ -105,12 +105,12 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
         notify::show("RAM Optimizer updated", &format!("Now on version {}.", update::CURRENT_VERSION));
     }
     let (update_sender, updates) = std::sync::mpsc::channel();
-    #[cfg(windows)]
-    if !demo {
-        update::start_checking(update_sender);
-    }
-    #[cfg(not(windows))]
-    drop(update_sender);
+    // Only real Windows builds update; a Mac build must never fetch the .exe.
+    let updater = if cfg!(windows) && !demo {
+        update::start(update_sender)
+    } else {
+        update::Updater::disabled()
+    };
 
     let ui = AppWindow::new()?;
     let settings = Settings::load();
@@ -159,6 +159,8 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         let tray = tray.clone();
+        #[cfg(windows)]
+        let updater = updater.clone();
         let mut ready_update = None;
         refresh.start(slint::TimerMode::Repeated, REFRESH_INTERVAL, move || {
             let Some(ui) = ui_weak.upgrade() else { return };
@@ -185,7 +187,7 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
             }
             #[cfg(windows)]
             if instance.as_ref().is_some_and(|i| i.show_requested()) {
-                show_window(&ui);
+                show_window(&ui, &updater);
             }
         });
     }
@@ -203,13 +205,14 @@ fn run(args: &Args) -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         let tray = tray.clone();
+        let updater = updater.clone();
         tray_poll.start(slint::TimerMode::Repeated, TRAY_POLL_INTERVAL, move || {
             let Some(ui) = ui_weak.upgrade() else { return };
             let actions = tray.borrow().as_ref().map(Tray::actions).unwrap_or_default();
             for action in actions {
                 let mut state = state.borrow_mut();
                 match action {
-                    TrayAction::Show => show_window(&ui),
+                    TrayAction::Show => show_window(&ui, &updater),
                     TrayAction::Optimize => {
                         state.optimize();
                         notify::show("Optimized", state.current_status());
@@ -402,7 +405,10 @@ fn install_update(ui: &AppWindow, state: &mut State, update: &update::ReadyUpdat
     }
 }
 
-fn show_window(ui: &AppWindow) {
+/// Shows the window and checks for updates, since opening the app is when
+/// you'd expect it to be up to date.
+fn show_window(ui: &AppWindow, updater: &update::Updater) {
+    updater.check_now();
     let _ = ui.show();
     ui.window().set_minimized(false);
     ui.window().with_winit_window(|window| window.focus_window());
