@@ -3,3 +3,4 @@
 /dist/*.zip
 /dist/*.sig
 .DS_Store
+.netlify

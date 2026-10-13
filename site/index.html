@@ -8,8 +8,7 @@
   <meta property="og:title" content="RAM Optimizer">
   <meta property="og:description" content="See what's using your PC's memory, close what you don't need, and make room for games.">
   <meta property="og:image" content="assets/icon-1024.png">
-  <meta name="theme-color" content="#E4E5E9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#2A2C31" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#E4E5E9">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" href="assets/icon.png" type="image/png">
   <link rel="apple-touch-icon" href="assets/icon.png">
@@ -18,10 +17,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script>
-    // Apply a saved theme before first paint to avoid a flash.
+    // Light unless the visitor switched to dark before; applied before first
+    // paint to avoid a flash.
     try {
-      const theme = localStorage.getItem("theme");
-      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+      if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark";
     } catch (_) {}
   </script>
 </head>
@@ -40,7 +39,7 @@
       <a href="#download">Download</a>
     </nav>
     <div class="nav-actions">
-      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch between light and dark">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch between light and dark theme">
         <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
         <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
       </button>

@@ -8,9 +8,7 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matc
 
 const root = document.documentElement;
 document.getElementById("theme-toggle").addEventListener("click", () => {
-  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const current = root.dataset.theme || (systemDark ? "dark" : "light");
-  const next = current === "dark" ? "light" : "dark";
+  const next = root.dataset.theme === "dark" ? "light" : "dark";
   root.dataset.theme = next;
   try { localStorage.setItem("theme", next); } catch (_) {}
 });

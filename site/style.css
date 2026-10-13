@@ -29,28 +29,7 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #2A2C31;
-    --shadow-dark: #17181B;
-    --shadow-light: #393C43;
-    --ink: #ECEDEF;
-    --ink-soft: #A6A9B0;
-    --ink-faint: #6C6F77;
-    --chip: #4B4E56;
-    --on-chip: #E4E5E9;
-    --accent: #E6A04A;
-    --accent-ink: #F2B866;
-    --accent-bg: #4A3923;
-    --seg-comp: #8D9098;
-    --seg-cache: #5B5E66;
-    --track: #3A3C42;
-    --well: #26282C;
-    --good: #7CC796;
-    color-scheme: dark;
-  }
-}
-
+/* Light by default; the toggle switches to dark. */
 :root[data-theme="dark"] {
   --bg: #2A2C31;
   --shadow-dark: #17181B;
@@ -183,13 +162,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .icon-btn:hover { color: var(--ink); }
 .icon-btn:active { box-shadow: var(--press-sm); }
 .icon-btn svg { width: 19px; height: 19px; }
-.icon-btn .moon { display: none; }
-:root[data-theme="dark"] .icon-btn .sun { display: none; }
-:root[data-theme="dark"] .icon-btn .moon { display: block; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .icon-btn .sun { display: none; }
-  :root:not([data-theme="light"]) .icon-btn .moon { display: block; }
-}
+/* Show the theme you'd switch to: a moon in light mode, a sun in dark. */
+.icon-btn .sun { display: none; }
+:root[data-theme="dark"] .icon-btn .sun { display: block; }
+:root[data-theme="dark"] .icon-btn .moon { display: none; }
 
 /* Buttons ------------------------------------------------------------------- */
 
