@@ -1,12 +1,12 @@
 // Windows resources: icon, version info shown in Explorer and Task Manager,
-// and the application manifest.
+// and the application manifest. build.rs fills in the {{...}} placeholders.
 
-1 ICON "assets/icon.ico"
-1 24 "app.manifest"
+1 ICON "{{ICON}}"
+1 24 "{{MANIFEST}}"
 
 1 VERSIONINFO
-FILEVERSION 0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION {{VERSION_NUMBERS}}
+PRODUCTVERSION {{VERSION_NUMBERS}}
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -16,11 +16,11 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "RAM Optimizer"
       VALUE "FileDescription", "RAM Optimizer"
-      VALUE "FileVersion", "0.1.0"
+      VALUE "FileVersion", "{{VERSION}}"
       VALUE "InternalName", "RAMOptimizer"
       VALUE "OriginalFilename", "RAMOptimizer.exe"
       VALUE "ProductName", "RAM Optimizer"
-      VALUE "ProductVersion", "0.1.0"
+      VALUE "ProductVersion", "{{VERSION}}"
     END
   END
   BLOCK "VarFileInfo"

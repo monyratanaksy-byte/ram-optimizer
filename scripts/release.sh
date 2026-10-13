@@ -27,8 +27,9 @@ sed -i '' "s/^version = \"$current\"/version = \"$version\"/" Cargo.toml
 cargo build --release --target x86_64-pc-windows-gnu
 cp target/x86_64-pc-windows-gnu/release/ram-optimizer.exe dist/RAMOptimizer.exe
 cargo run -q -p release-tool -- sign dist/RAMOptimizer.exe "$version"
-rm -f dist/RAMOptimizer-windows.zip
-(cd dist && zip -q RAMOptimizer-windows.zip RAMOptimizer.exe HOW-TO-TEST.txt)
+zip="RAMOptimizer-v$version-windows.zip"
+rm -f dist/RAMOptimizer*-windows.zip
+(cd dist && zip -q "$zip" RAMOptimizer.exe HOW-TO-TEST.txt)
 
 git add Cargo.toml Cargo.lock
 git commit -m "Release v$version"
@@ -37,6 +38,6 @@ git push
 git push origin "v$version"
 
 gh release create "v$version" \
-    dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig dist/RAMOptimizer-windows.zip \
+    dist/RAMOptimizer.exe dist/RAMOptimizer.exe.sig "dist/$zip" \
     --title "v$version" --notes "$notes"
 echo "Released v$version. Installed copies will update within a few hours (or on their next start)."

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="RAMOptimizer" version="0.1.0.0" processorArchitecture="amd64"/>
+  <assemblyIdentity type="win32" name="RAMOptimizer" version="{{VERSION}}.0" processorArchitecture="amd64"/>
   <description>RAM Optimizer</description>
   <!-- Starts without admin rights; the app asks for them itself when useful. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
