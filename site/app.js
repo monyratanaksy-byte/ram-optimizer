@@ -13,6 +13,16 @@ document.getElementById("theme-toggle").addEventListener("click", () => {
   try { localStorage.setItem("theme", next); } catch (_) {}
 });
 
+/* Logo scrolls back to the top --------------------------------------------- */
+
+// The header is sticky, so linking to it doesn't scroll anywhere; scroll the
+// page itself instead.
+document.querySelector(".nav .brand").addEventListener("click", (event) => {
+  event.preventDefault();
+  window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+  history.replaceState(null, "", location.pathname + location.search);
+});
+
 /* Navigation background once scrolled -------------------------------------- */
 
 const nav = document.querySelector(".nav");
