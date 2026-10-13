@@ -1,0 +1,9 @@
+[package]
+name = "release-tool"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+ram-core = { path = "../core" }
+getrandom = "0.2"

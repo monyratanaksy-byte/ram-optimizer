@@ -1,0 +1,762 @@
+// Composite widgets for the main window.
+
+import { Palette, Icons, Raised, Inset, NeuButton } from "neu.slint";
+
+export struct StartupRow {
+    id: string,
+    name: string,
+    letter: string,
+    // e.g. "1.2 GB now" or "Not running".
+    detail: string,
+    enabled: bool,
+}
+
+export struct GamingRow {
+    name: string,
+    checked: bool,
+}
+
+export struct FindingRow {
+    // 0 = good, 1 = info, 2 = warning.
+    level: int,
+    title: string,
+    detail: string,
+}
+
+export struct AppRow {
+    name: string,
+    letter: string,
+    size: string,
+    // Size relative to the largest app, 0..1.
+    share: float,
+    idle: string,
+    // Growth warning such as "+66 MB/min"; empty when the app is steady.
+    growth: string,
+    // Asked to close and waiting for it to exit.
+    closing: bool,
+    // Ignored the close request; offer force quit instead.
+    can-force: bool,
+}
+
+component Light inherits Rectangle {
+    in property <string> label;
+    in property <color> fill;
+    in property <color> rim;
+    in property <string> glyph;
+    in property <bool> show-glyph;
+    out property <bool> hovered: touch.has-hover;
+    callback activated;
+
+    y: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background: root.fill;
+    border-width: 0.5px;
+    border-color: root.rim;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.activated(); }
+
+    if root.show-glyph : Path {
+        width: 12px;
+        height: 12px;
+        viewbox-width: 12;
+        viewbox-height: 12;
+        commands: root.glyph;
+        fill: transparent;
+        stroke: #0000008C;
+        stroke-width: 1.2px;
+    }
+
+    // Slightly larger than the dot so it's easy to hit.
+    touch := TouchArea {
+        x: -3px;
+        y: -3px;
+        width: parent.width + 6px;
+        height: parent.height + 6px;
+        clicked => { root.activated(); }
+    }
+}
+
+// macOS-style window controls. Like the real ones, all glyphs appear when
+// the pointer is over any of the three.
+export component TrafficLights inherits Rectangle {
+    callback close();
+    callback minimize();
+    callback zoom();
+
+    property <bool> hovered: red.hovered || yellow.hovered || green.hovered;
+
+    width: 52px;
+    height: 12px;
+
+    red := Light {
+        x: 0;
+        label: "Close";
+        fill: #FF5F57;
+        rim: #E2463F;
+        glyph: "M4 4 L8 8 M8 4 L4 8";
+        show-glyph: root.hovered;
+        activated => { root.close(); }
+    }
+
+    yellow := Light {
+        x: 20px;
+        label: "Minimize";
+        fill: #FEBC2E;
+        rim: #E1A116;
+        glyph: "M3.5 6 H8.5";
+        show-glyph: root.hovered;
+        activated => { root.minimize(); }
+    }
+
+    green := Light {
+        x: 40px;
+        label: "Expand";
+        fill: #28C840;
+        rim: #14AE2E;
+        glyph: "M6 3.5 V8.5 M3.5 6 H8.5";
+        show-glyph: root.hovered;
+        activated => { root.zoom(); }
+    }
+}
+
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> warn: false;
+
+    height: 18px;
+    // Shrinks (with "…") instead of pushing neighbors out of a tight row.
+    min-width: 28px;
+    border-radius: 9px;
+    background: root.warn ? Palette.warn-bg : Palette.chip;
+
+    HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 7px;
+        Text {
+            text: root.text;
+            color: root.warn ? Palette.warn-ink : Palette.on-chip;
+            font-size: 10px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// Splits physical RAM into in use / compressed / cached, with free as the
+// empty part of the track.
+export component UsageBar inherits Rectangle {
+    in property <float> in-use;
+    in property <float> compressed;
+    in property <float> cached;
+
+    property <length> track: root.width - 6px;
+    property <length> w-in-use: max(0px, root.track * root.in-use);
+    property <length> w-compressed: max(0px, root.track * root.compressed - 2px);
+    property <length> w-cached: max(0px, root.track * root.cached - 2px);
+    animate w-in-use, w-compressed, w-cached { duration: 500ms; easing: ease-out; }
+
+    height: 16px;
+
+    Inset {
+        width: root.width;
+        height: root.height;
+        radius: 8px;
+        depth: 3px;
+
+        Rectangle { x: 3px; y: 3px; height: 10px; width: root.w-in-use; border-radius: 5px; background: Palette.ink; }
+        Rectangle { x: 3px + root.w-in-use + 2px; y: 3px; height: 10px; width: root.w-compressed; border-radius: 5px; background: Palette.seg-compressed; }
+        Rectangle { x: 3px + root.w-in-use + root.w-compressed + 4px; y: 3px; height: 10px; width: root.w-cached; border-radius: 5px; background: Palette.seg-cached; }
+    }
+}
+
+export component LegendItem inherits VerticalLayout {
+    in property <color> swatch;
+    in property <bool> hollow: false;
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 2px;
+
+    HorizontalLayout {
+        spacing: 5px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 7px;
+                height: 7px;
+                border-radius: 3.5px;
+                background: root.hollow ? transparent : root.swatch;
+                border-width: root.hollow ? 1px : 0px;
+                border-color: Palette.ink-faint;
+            }
+        }
+        Text { text: root.label; font-size: 11px; color: Palette.ink-soft; }
+    }
+
+    Text { text: root.value; font-size: 13px; color: Palette.ink; }
+}
+
+// Last minute of RAM usage. The Rust side builds the path data on a
+// 320x48 grid, matching the Path size here.
+export component Sparkline inherits Rectangle {
+    in property <string> line;
+    in property <string> area;
+    in property <string> caption;
+    in property <string> peak;
+
+    height: 92px;
+
+    Inset {
+        width: root.width;
+        height: root.height;
+        radius: 22px;
+        depth: 6px;
+    }
+
+    Text { x: 18px; y: 12px; text: root.caption; font-size: 11px; color: Palette.ink-soft; }
+    Text { x: root.width - self.width - 18px; y: 12px; text: root.peak; font-size: 11px; color: Palette.ink-soft; }
+
+    Path {
+        x: (root.width - 320px) / 2;
+        y: 34px;
+        width: 320px;
+        height: 48px;
+        viewbox-width: 320;
+        viewbox-height: 48;
+        commands: root.area;
+        fill: Palette.ink.transparentize(0.92);
+        stroke: transparent;
+    }
+
+    Path {
+        x: (root.width - 320px) / 2;
+        y: 34px;
+        width: 320px;
+        height: 48px;
+        viewbox-width: 320;
+        viewbox-height: 48;
+        commands: root.line;
+        fill: transparent;
+        stroke: Palette.ink;
+        stroke-width: 1.5px;
+    }
+}
+
+// Auto-clear button: a ring filled up to the threshold, with the number inside.
+export component AutoButton inherits Rectangle {
+    in property <bool> enabled;
+    in property <int> threshold;
+    in property <bool> active;
+    callback clicked;
+
+    property <bool> sunk: root.active || touch.pressed;
+    property <float> fraction: root.threshold / 100;
+
+    accessible-role: button;
+    accessible-label: "Auto-clear settings";
+    accessible-action-default => { root.clicked(); }
+
+    width: 46px;
+    height: 46px;
+
+    if !root.sunk : Raised { width: root.width; height: root.height; radius: root.width / 2; depth: 4px; }
+    if root.sunk : Inset { width: root.width; height: root.height; radius: root.width / 2; depth: 4px; }
+
+    Rectangle {
+        width: 30px;
+        height: 30px;
+        border-radius: 15px;
+        border-width: 2px;
+        border-color: Palette.track;
+    }
+
+    Path {
+        width: 30px;
+        height: 30px;
+        viewbox-width: 30;
+        viewbox-height: 30;
+        fill: transparent;
+        stroke: root.enabled ? Palette.accent : Palette.ink-faint;
+        stroke-width: 2px;
+        MoveTo { x: 15; y: 1; }
+        ArcTo {
+            x: 15 + 14 * sin(root.fraction * 360deg);
+            y: 15 - 14 * cos(root.fraction * 360deg);
+            radius-x: 14;
+            radius-y: 14;
+            large-arc: root.fraction > 0.5;
+            sweep: true;
+        }
+    }
+
+    Text {
+        text: root.enabled ? "\{root.threshold}" : "off";
+        font-size: 10px;
+        color: root.enabled ? Palette.ink : Palette.ink-faint;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// On/off switch: a raised knob sliding in a pressed-in track. Controlled:
+// it reports `toggled` and shows whatever `checked` is set to.
+export component NeuToggle inherits Rectangle {
+    in property <bool> checked;
+    in property <string> label;
+    callback toggled(bool);
+
+    width: 46px;
+    height: 26px;
+    accessible-role: checkbox;
+    accessible-label: root.label;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-action-default => { root.toggled(!root.checked); }
+
+    Inset { width: root.width; height: root.height; radius: 13px; depth: 3px; }
+
+    Raised {
+        x: root.checked ? root.width - 23px : 3px;
+        y: 3px;
+        width: 20px;
+        height: 20px;
+        radius: 10px;
+        depth: 2px;
+        animate x { duration: 180ms; easing: ease-out; }
+
+        Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.checked ? Palette.accent : Palette.ink-faint;
+        }
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+}
+
+// Slider that snaps to `step`: pressed-in track, ink fill, raised knob.
+export component NeuSlider inherits Rectangle {
+    in property <int> minimum: 0;
+    in property <int> maximum: 100;
+    in property <int> step: 1;
+    in-out property <int> value;
+
+    property <float> fraction: (root.value - root.minimum) / (root.maximum - root.minimum);
+    property <length> knob: 22px;
+
+    accessible-role: slider;
+    accessible-value: root.value;
+    accessible-value-minimum: root.minimum;
+    accessible-value-maximum: root.maximum;
+    accessible-value-step: root.step;
+    accessible-action-set-value(v) => { root.value = clamp(v.to-float(), root.minimum, root.maximum); }
+    accessible-action-increment => { root.value = min(root.value + root.step, root.maximum); }
+    accessible-action-decrement => { root.value = max(root.value - root.step, root.minimum); }
+
+    function set-from(x: length) {
+        let raw = clamp((x - root.knob / 2) / (root.width - root.knob), 0, 1) * (root.maximum - root.minimum);
+        root.value = root.minimum + round(raw / root.step) * root.step;
+    }
+
+    height: 26px;
+
+    Inset {
+        y: (root.height - 10px) / 2;
+        width: root.width;
+        height: 10px;
+        radius: 5px;
+        depth: 2px;
+    }
+
+    Rectangle {
+        x: 2px;
+        y: (root.height - 6px) / 2;
+        width: root.knob / 2 + (root.width - root.knob) * root.fraction;
+        height: 6px;
+        border-radius: 3px;
+        background: Palette.ink;
+    }
+
+    Raised {
+        x: (root.width - root.knob) * root.fraction;
+        y: (root.height - root.knob) / 2;
+        width: root.knob;
+        height: root.knob;
+        radius: root.knob / 2;
+        depth: 3px;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.set-from(self.mouse-x);
+            }
+        }
+        moved => { root.set-from(self.mouse-x); }
+    }
+}
+
+export component AppRowView inherits Rectangle {
+    in property <AppRow> app;
+    // Shows the "Close this app?" question in place of the normal row.
+    in property <bool> confirming;
+    callback ask-close();
+    callback cancel-close();
+    callback confirm-close();
+    callback force-quit();
+
+    property <string> chip: root.app.closing ? "closing…" : root.app.growth != "" ? root.app.growth : root.app.idle;
+    property <bool> chip-warn: !root.app.closing && root.app.growth != "";
+
+    height: 46px;
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        VerticalLayout {
+            alignment: center;
+            Raised {
+                width: 36px;
+                height: 36px;
+                radius: 18px;
+                depth: 3px;
+                Text { text: root.app.letter; font-size: 14px; color: Palette.ink; }
+            }
+        }
+
+        if root.confirming : HorizontalLayout {
+            spacing: 6px;
+
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 2px;
+                Text {
+                    text: "Close " + root.app.name + "?";
+                    font-size: 13px;
+                    color: Palette.ink;
+                    overflow: elide;
+                }
+                Text { text: "Unsaved work may be lost"; font-size: 10px; color: Palette.ink-soft; overflow: elide; }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    height: 30px;
+                    depth: 3px;
+                    text: "Cancel";
+                    font-size: 12px;
+                    clicked => { root.cancel-close(); }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    height: 30px;
+                    depth: 3px;
+                    text: "Close";
+                    font-size: 12px;
+                    warn: true;
+                    label: "Close " + root.app.name;
+                    clicked => { root.confirm-close(); }
+                }
+            }
+        }
+
+        if !root.confirming : HorizontalLayout {
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 7px;
+                horizontal-stretch: 1;
+
+                HorizontalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: root.app.name;
+                        min-width: min(self.preferred-width, 40px);
+                        font-size: 14px;
+                        color: Palette.ink;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                    // One chip at most, most important first, so the row
+                    // never grows wide enough to push the buttons out.
+                    if root.chip != "" : VerticalLayout {
+                        alignment: center;
+                        Chip { text: root.chip; warn: root.chip-warn; }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+
+                Rectangle {
+                    height: 4px;
+                    border-radius: 2px;
+                    background: Palette.track;
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * root.app.share;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: Palette.ink-soft;
+                        animate width { duration: 500ms; easing: ease-out; }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: root.app.size;
+                    min-width: 52px;
+                    font-size: 13px;
+                    color: Palette.ink;
+                    horizontal-alignment: right;
+                }
+            }
+
+            if root.app.can-force : VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    height: 30px;
+                    depth: 3px;
+                    text: "Force quit";
+                    font-size: 12px;
+                    warn: true;
+                    label: "Force quit " + root.app.name;
+                    clicked => { root.force-quit(); }
+                }
+            }
+
+            if !root.app.can-force : VerticalLayout {
+                alignment: center;
+                NeuButton {
+                    width: 32px;
+                    height: 32px;
+                    depth: 3px;
+                    icon: Icons.close;
+                    icon-size: 13px;
+                    label: "Close " + root.app.name;
+                    clicked => { root.ask-close(); }
+                }
+            }
+        }
+    }
+}
+
+// Pill-shaped switch between a few options; the raised thumb slides over.
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in property <int> selected;
+    callback changed(int);
+
+    property <length> segment: (root.width - 6px) / max(1, root.options.length);
+
+    height: 30px;
+
+    Inset { width: root.width; height: root.height; radius: root.height / 2; depth: 3px; }
+
+    Raised {
+        x: 3px + root.selected * root.segment;
+        y: 3px;
+        width: root.segment;
+        height: root.height - 6px;
+        radius: (root.height - 6px) / 2;
+        depth: 2px;
+        animate x { duration: 200ms; easing: ease-out; }
+    }
+
+    for option[i] in root.options : Rectangle {
+        x: 3px + i * root.segment;
+        y: 0;
+        width: root.segment;
+        height: root.height;
+        accessible-role: button;
+        accessible-label: option;
+        accessible-action-default => { root.changed(i); }
+
+        Text {
+            text: option;
+            font-size: 12px;
+            color: i == root.selected ? Palette.ink : Palette.ink-soft;
+        }
+
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.changed(i); }
+        }
+    }
+}
+
+// Flat icon button for the title bar.
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: root.active || touch.has-hover ? Palette.track : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+
+    Path {
+        width: 16px;
+        height: 16px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.icon;
+        fill: transparent;
+        stroke: root.active ? Palette.ink : Palette.ink-soft;
+        stroke-width: 1.8px;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Title, optional explanation, and an on/off switch.
+export component SettingRow inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> detail;
+    in property <bool> checked;
+    callback toggled(bool);
+
+    spacing: 12px;
+
+    VerticalLayout {
+        alignment: center;
+        horizontal-stretch: 1;
+        spacing: 2px;
+        Text { text: root.title; font-size: 13px; color: Palette.ink; overflow: elide; }
+        if root.detail != "" : Text {
+            text: root.detail;
+            font-size: 11px;
+            color: Palette.ink-soft;
+            wrap: word-wrap;
+        }
+    }
+
+    VerticalLayout {
+        alignment: center;
+        NeuToggle {
+            checked: root.checked;
+            label: root.title;
+            toggled(on) => { root.toggled(on); }
+        }
+    }
+}
+
+export component StartupRowView inherits Rectangle {
+    in property <StartupRow> entry;
+    callback toggled(bool);
+
+    height: 44px;
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        VerticalLayout {
+            alignment: center;
+            Raised {
+                width: 32px;
+                height: 32px;
+                radius: 16px;
+                depth: 3px;
+                Text { text: root.entry.letter; font-size: 13px; color: Palette.ink; }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text {
+                text: root.entry.name;
+                font-size: 13px;
+                color: root.entry.enabled ? Palette.ink : Palette.ink-faint;
+                overflow: elide;
+            }
+            Text { text: root.entry.detail; font-size: 11px; color: Palette.ink-soft; overflow: elide; }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            NeuToggle {
+                checked: root.entry.enabled;
+                label: "Start " + root.entry.name + " with Windows";
+                toggled(on) => { root.toggled(on); }
+            }
+        }
+    }
+}
+
+export component GamingRowView inherits Rectangle {
+    in property <GamingRow> item;
+    callback toggled(bool);
+
+    height: 36px;
+
+    HorizontalLayout {
+        spacing: 12px;
+        Text {
+            text: root.item.name;
+            horizontal-stretch: 1;
+            font-size: 13px;
+            color: Palette.ink;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        VerticalLayout {
+            alignment: center;
+            NeuToggle {
+                checked: root.item.checked;
+                label: "Close " + root.item.name + " when gaming";
+                toggled(on) => { root.toggled(on); }
+            }
+        }
+    }
+}
+
+export component FindingRowView inherits HorizontalLayout {
+    in property <FindingRow> finding;
+
+    spacing: 10px;
+
+    VerticalLayout {
+        padding-top: 5px;
+        alignment: start;
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.finding.level == 2 ? Palette.accent : root.finding.level == 1 ? Palette.ink-faint : Palette.good;
+        }
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 2px;
+        Text { text: root.finding.title; font-size: 12px; color: Palette.ink; wrap: word-wrap; }
+        Text { text: root.finding.detail; font-size: 11px; color: Palette.ink-soft; wrap: word-wrap; }
+    }
+}

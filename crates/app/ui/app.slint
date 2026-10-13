@@ -1,0 +1,601 @@
+import { Palette, Icons, NeuButton } from "neu.slint";
+import {
+    AppRow, AppRowView, AutoButton, Chip, FindingRow, FindingRowView, GamingRow, GamingRowView,
+    IconButton, LegendItem, NeuSlider, NeuToggle, Segmented, SettingRow, Sparkline, StartupRow,
+    StartupRowView, TrafficLights, UsageBar
+} from "widgets.slint";
+
+export { AppRow, FindingRow, GamingRow, Palette, StartupRow }
+
+// Frameless, transparent window: the rounded card is the whole app. The card
+// is compact by default; each toolbar button slides open its own panel.
+export component AppWindow inherits Window {
+    title: "RAM Optimizer";
+    icon: @image-url("../assets/icon.png");
+    no-frame: true;
+    background: transparent;
+    default-font-family: "Space Grotesk";
+
+    in property <string> title-text: "RAM Optimizer";
+    in property <string> version-text;
+    in property <string> used-gb: "0.0 GB";
+    in property <string> used-caption;
+    // Free plus cache: what apps can still get right away.
+    in property <string> available-gb;
+    in property <string> pressure-text: "Healthy";
+    in property <bool> pressure-high: false;
+    in property <float> share-in-use;
+    in property <float> share-compressed;
+    in property <float> share-cached;
+    in property <string> legend-in-use;
+    in property <string> legend-compressed;
+    in property <string> legend-cached;
+    in property <string> legend-free;
+    in property <string> status;
+
+    // Top apps.
+    in property <[AppRow]> apps;
+    in property <string> app-count;
+
+    // History: 0 = last minute, 1 = last hour, 2 = last 24 hours.
+    in-out property <int> history-range: 0;
+    in property <string> history-line: "M 0 24 L 320 24";
+    in property <string> history-area: "M 0 24 L 320 24 L 320 48 L 0 48 Z";
+    in property <string> history-caption: "Last 60 seconds";
+    in property <string> history-peak;
+    in property <string> history-detail;
+
+    // Auto-clear.
+    in property <string> auto-note;
+    in property <bool> auto-warn;
+    in-out property <bool> auto-enabled: true;
+    in-out property <int> auto-threshold: 80;
+
+    in-out property <bool> game-mode: false;
+
+    // Settings.
+    in-out property <bool> start-with-windows: true;
+    in-out property <bool> alerts-enabled: true;
+    in-out property <bool> auto-game-mode: true;
+    in property <[GamingRow]> gaming-rows;
+    in property <[StartupRow]> startup-rows;
+    in property <string> startup-note;
+    in property <[FindingRow]> findings;
+    in property <bool> checkup-running;
+    in property <string> checkup-summary: "Checks your RAM speed, memory sticks, page file and compression.";
+
+    callback close-app();
+    callback minimize();
+    callback start-drag();
+    callback quit-app(string);
+    callback force-quit-app(string);
+    callback optimize();
+    callback game-mode-toggled(bool);
+    // Something in settings changed; the Rust side reads and saves them all.
+    callback settings-changed();
+    callback settings-opened();
+    callback set-startup(string, bool);
+    callback toggle-gaming-close(string, bool);
+    callback run-checkup();
+    // Redraw now instead of at the next tick (e.g. history range changed).
+    callback refresh();
+
+    changed auto-threshold => { root.settings-changed(); }
+
+    // 0 = collapsed, 1 = apps, 2 = history, 3 = auto-clear, 4 = settings.
+    property <int> panel: 0;
+    // The panel whose content is drawn. It outlives `panel` so a closing
+    // panel stays visible while it slides shut.
+    property <int> shown-panel: 1;
+    property <int> settings-tab: 0;
+    // App whose row is asking "Close this app?". Keyed by name, not row,
+    // because rows re-sort every second.
+    property <string> confirming-app;
+
+    function toggle-panel(p: int) {
+        if (root.panel == p) {
+            root.panel = 0;
+        } else {
+            root.panel = p;
+            root.shown-panel = p;
+        }
+    }
+
+    property <length> card-width: 380px;
+    property <length> margin-x: 28px;
+    property <length> margin-top: 14px;
+    property <length> margin-bottom: 36px;
+    // Room for the tallest panel; the window holds this size while animating.
+    property <length> max-panel: 370px;
+
+    property <length> target-h: root.panel != 0 ? top.preferred-height + panel-area.preferred-height : top.preferred-height;
+    property <length> card-h: root.target-h;
+    animate card-h { duration: 320ms; easing: ease-in-out; }
+    property <bool> animating: root.card-h - root.target-h > 0.5px || root.target-h - root.card-h > 0.5px;
+    // Resizing the OS window every frame stutters, so the window jumps to a
+    // size that fits the whole animation and settles once the card is done.
+    property <length> window-card-h: root.animating ? max(root.target-h, top.preferred-height + root.max-panel) : root.target-h;
+
+    width: root.card-width + 2 * root.margin-x;
+    height: root.window-card-h + root.margin-top + root.margin-bottom;
+
+    Rectangle {
+        x: root.margin-x;
+        y: root.margin-top;
+        width: root.card-width;
+        height: root.card-h;
+        background: Palette.bg;
+        border-radius: 30px;
+        border-width: 1px;
+        border-color: Palette.card-rim;
+        drop-shadow-offset-y: 10px;
+        drop-shadow-blur: 26px;
+        drop-shadow-color: Palette.card-shadow;
+        clip: true;
+
+        // Drag the window from any empty part of the card.
+        TouchArea {
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    root.start-drag();
+                }
+            }
+        }
+
+        top := VerticalLayout {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: self.preferred-height;
+            padding: 18px;
+            padding-top: 11px;
+            spacing: 12px;
+
+            HorizontalLayout {
+                height: 24px;
+
+                VerticalLayout {
+                    alignment: center;
+                    TrafficLights {
+                        close => { root.close-app(); }
+                        minimize => { root.minimize(); }
+                        zoom => {
+                            if (root.panel == 0) {
+                                root.toggle-panel(1);
+                            } else {
+                                root.panel = 0;
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.title-text;
+                    horizontal-stretch: 1;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Palette.ink-soft;
+                }
+
+                // Same width as the traffic lights, so the title stays centered.
+                HorizontalLayout {
+                    width: 52px;
+                    alignment: end;
+                    IconButton {
+                        icon: Icons.sliders;
+                        label: "Settings";
+                        active: root.panel == 4;
+                        clicked => {
+                            root.toggle-panel(4);
+                            root.settings-opened();
+                        }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Text { text: root.used-gb; font-size: 34px; color: Palette.ink; }
+                    Text {
+                        text: root.status != "" ? root.status : root.used-caption;
+                        font-size: 12px;
+                        color: root.status != "" ? Palette.warn-ink : Palette.ink-soft;
+                        overflow: elide;
+                    }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 0;
+                    alignment: start;
+                    padding-top: 4px;
+                    spacing: 6px;
+                    HorizontalLayout {
+                        alignment: end;
+                        Chip { text: root.pressure-text; warn: root.pressure-high; }
+                    }
+                    Text {
+                        text: root.available-gb;
+                        font-size: 20px;
+                        color: Palette.ink;
+                        horizontal-alignment: right;
+                    }
+                    Text {
+                        text: "available";
+                        font-size: 11px;
+                        color: Palette.ink-soft;
+                        horizontal-alignment: right;
+                    }
+                }
+            }
+
+            UsageBar {
+                in-use: root.share-in-use;
+                compressed: root.share-compressed;
+                cached: root.share-cached;
+            }
+
+            HorizontalLayout {
+                alignment: space-between;
+                LegendItem { swatch: Palette.ink; label: "In use"; value: root.legend-in-use; }
+                LegendItem { swatch: Palette.seg-compressed; label: "Compressed"; value: root.legend-compressed; }
+                LegendItem { swatch: Palette.seg-cached; label: "Cached"; value: root.legend-cached; }
+                LegendItem { hollow: true; label: "Free"; value: root.legend-free; }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                padding-top: 2px;
+
+                NeuButton {
+                    height: 46px;
+                    horizontal-stretch: 1;
+                    depth: 4px;
+                    icon: Icons.sweep;
+                    icon-size: 17px;
+                    text: "Optimize";
+                    font-size: 15px;
+                    clicked => { root.optimize(); }
+                }
+
+                NeuButton {
+                    width: 46px;
+                    height: 46px;
+                    depth: 4px;
+                    icon: Icons.list;
+                    icon-size: 18px;
+                    label: "Top apps";
+                    active: root.panel == 1;
+                    accent-when-active: false;
+                    clicked => { root.toggle-panel(1); }
+                }
+
+                NeuButton {
+                    width: 46px;
+                    height: 46px;
+                    depth: 4px;
+                    icon: Icons.chart;
+                    icon-size: 18px;
+                    label: "Usage history";
+                    active: root.panel == 2;
+                    accent-when-active: false;
+                    clicked => { root.toggle-panel(2); }
+                }
+
+                AutoButton {
+                    enabled: root.auto-enabled;
+                    threshold: root.auto-threshold;
+                    active: root.panel == 3;
+                    clicked => { root.toggle-panel(3); }
+                }
+
+                NeuButton {
+                    width: 46px;
+                    height: 46px;
+                    depth: 4px;
+                    icon: Icons.bolt;
+                    icon-size: 19px;
+                    label: "Game mode";
+                    active: root.game-mode;
+                    clicked => {
+                        root.game-mode = !root.game-mode;
+                        root.game-mode-toggled(root.game-mode);
+                    }
+                }
+            }
+        }
+
+        panel-area := VerticalLayout {
+            x: 0;
+            y: top.height;
+            width: parent.width;
+            height: self.preferred-height;
+            padding-left: 18px;
+            padding-right: 18px;
+            padding-top: 4px;
+            padding-bottom: 18px;
+            spacing: 14px;
+
+            // Etched divider.
+            Rectangle {
+                height: 2px;
+                Rectangle { y: 0; height: 1px; background: Palette.etch-dark; }
+                Rectangle { y: 1px; height: 1px; background: Palette.etch-light; }
+            }
+
+            if root.shown-panel == 1 : VerticalLayout {
+                spacing: 4px;
+
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    Text { text: "Top apps"; font-size: 13px; color: Palette.ink; }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text { text: root.app-count; font-size: 11px; color: Palette.ink-soft; vertical-alignment: center; }
+                }
+
+                Flickable {
+                    height: min(root.apps.length, 4) * 54px;
+                    content-height: root.apps.length * 54px;
+
+                    VerticalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        padding-top: 4px;
+                        spacing: 8px;
+
+                        for app in root.apps : AppRowView {
+                            app: app;
+                            confirming: root.confirming-app == app.name;
+                            ask-close => { root.confirming-app = app.name; }
+                            cancel-close => { root.confirming-app = ""; }
+                            confirm-close => {
+                                root.confirming-app = "";
+                                root.quit-app(app.name);
+                            }
+                            force-quit => { root.force-quit-app(app.name); }
+                        }
+                    }
+                }
+            }
+
+            if root.shown-panel == 2 : VerticalLayout {
+                spacing: 10px;
+
+                Segmented {
+                    options: ["1 minute", "1 hour", "24 hours"];
+                    selected: root.history-range;
+                    changed(range) => {
+                        root.history-range = range;
+                        root.refresh();
+                    }
+                }
+
+                Sparkline {
+                    line: root.history-line;
+                    area: root.history-area;
+                    caption: root.history-caption;
+                    peak: root.history-peak;
+                }
+
+                // Two short lines (split with \n) rather than wrapping, so
+                // the panel sizes itself correctly.
+                if root.history-detail != "" : Text {
+                    text: root.history-detail;
+                    font-size: 11px;
+                    color: Palette.ink-soft;
+                    overflow: elide;
+                }
+            }
+
+            if root.shown-panel == 3 : VerticalLayout {
+                spacing: 12px;
+                padding-left: 4px;
+                padding-right: 4px;
+
+                SettingRow {
+                    title: "Auto-clear";
+                    detail: "Frees idle apps when RAM passes \{root.auto-threshold}%";
+                    checked: root.auto-enabled;
+                    toggled(on) => {
+                        root.auto-enabled = on;
+                        root.settings-changed();
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    NeuSlider {
+                        minimum: 30;
+                        maximum: 90;
+                        step: 5;
+                        value <=> root.auto-threshold;
+                    }
+                    HorizontalLayout {
+                        alignment: space-between;
+                        padding-left: 4px;
+                        padding-right: 4px;
+                        for mark in [30, 40, 50, 60, 70, 80, 90] : Text {
+                            text: "\{mark}";
+                            font-size: 10px;
+                            color: Palette.ink-faint;
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.auto-note;
+                    font-size: 11px;
+                    color: root.auto-warn ? Palette.warn-ink : Palette.ink-soft;
+                    wrap: word-wrap;
+                }
+            }
+
+            if root.shown-panel == 4 : VerticalLayout {
+                spacing: 12px;
+
+                Segmented {
+                    options: ["General", "Startup apps", "Check-up"];
+                    selected: root.settings-tab;
+                    changed(tab) => {
+                        root.settings-tab = tab;
+                        root.settings-opened();
+                    }
+                }
+
+                if root.settings-tab == 0 : VerticalLayout {
+                    spacing: 10px;
+                    padding-left: 4px;
+                    padding-right: 4px;
+
+                    SettingRow {
+                        title: "Start with Windows";
+                        detail: "Runs quietly in the tray";
+                        checked: root.start-with-windows;
+                        toggled(on) => {
+                            root.start-with-windows = on;
+                            root.settings-changed();
+                        }
+                    }
+
+                    SettingRow {
+                        title: "Alerts";
+                        detail: "When memory runs low or an app keeps growing";
+                        checked: root.alerts-enabled;
+                        toggled(on) => {
+                            root.alerts-enabled = on;
+                            root.settings-changed();
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: "Theme";
+                            horizontal-stretch: 1;
+                            font-size: 13px;
+                            color: Palette.ink;
+                            vertical-alignment: center;
+                        }
+                        Segmented {
+                            width: 186px;
+                            options: ["System", "Light", "Dark"];
+                            selected: Palette.theme;
+                            changed(theme) => {
+                                Palette.theme = theme;
+                                root.settings-changed();
+                            }
+                        }
+                    }
+
+                    SettingRow {
+                        title: "Auto game mode";
+                        detail: "On when a game starts, off when it closes";
+                        checked: root.auto-game-mode;
+                        toggled(on) => {
+                            root.auto-game-mode = on;
+                            root.settings-changed();
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text { text: "Close when gaming"; font-size: 13px; color: Palette.ink; }
+                        Text {
+                            text: root.gaming-rows.length == 0 ? "Open some apps to pick from them here." : "Game mode closes these so they can't take RAM.";
+                            font-size: 11px;
+                            color: Palette.ink-soft;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Flickable {
+                        height: min(root.gaming-rows.length, 2) * 36px;
+                        content-height: root.gaming-rows.length * 36px;
+                        VerticalLayout {
+                            for row in root.gaming-rows : GamingRowView {
+                                item: row;
+                                toggled(on) => { root.toggle-gaming-close(row.name, on); }
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: root.version-text;
+                        font-size: 10px;
+                        color: Palette.ink-faint;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                if root.settings-tab == 1 : VerticalLayout {
+                    spacing: 8px;
+
+                    Text {
+                        text: root.startup-note;
+                        font-size: 11px;
+                        color: Palette.ink-soft;
+                        wrap: word-wrap;
+                    }
+
+                    Flickable {
+                        height: min(root.startup-rows.length, 5) * 48px;
+                        content-height: root.startup-rows.length * 48px;
+                        VerticalLayout {
+                            padding-left: 4px;
+                            padding-right: 4px;
+                            padding-top: 2px;
+                            spacing: 4px;
+                            for entry in root.startup-rows : StartupRowView {
+                                entry: entry;
+                                toggled(on) => { root.set-startup(entry.id, on); }
+                            }
+                        }
+                    }
+                }
+
+                if root.settings-tab == 2 : VerticalLayout {
+                    spacing: 12px;
+                    padding-left: 4px;
+                    padding-right: 4px;
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: root.checkup-summary;
+                            horizontal-stretch: 1;
+                            font-size: 11px;
+                            color: Palette.ink-soft;
+                            wrap: word-wrap;
+                            vertical-alignment: center;
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            NeuButton {
+                                height: 32px;
+                                depth: 3px;
+                                text: root.checkup-running ? "Checking…" : root.findings.length == 0 ? "Run check-up" : "Check again";
+                                font-size: 12px;
+                                clicked => {
+                                    if (!root.checkup-running) {
+                                        root.run-checkup();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Flickable {
+                        height: min(findings-list.preferred-height, 250px);
+                        content-height: findings-list.preferred-height;
+                        findings-list := VerticalLayout {
+                            spacing: 10px;
+                            for finding in root.findings : FindingRowView { finding: finding; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

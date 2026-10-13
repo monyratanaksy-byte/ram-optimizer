@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/app", "crates/release-tool"]
+# Building the workspace builds the app; the release tool runs on demand.
+default-members = ["crates/core", "crates/app"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+
+# The optimizer must stay light itself, so release builds favor size.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,182 @@
+// Neumorphism building blocks: raised surfaces, pressed-in wells, buttons.
+
+import { Palette as SystemPalette } from "std-widgets.slint";
+
+export global Palette {
+    // 0 = follow the system, 1 = light, 2 = dark.
+    in-out property <int> theme: 0;
+    out property <bool> dark: theme == 2 || (theme == 0 && SystemPalette.color-scheme == ColorScheme.dark);
+
+    out property <color> bg: dark ? #2A2C31 : #E4E5E9;
+    out property <color> shadow-dark: dark ? #17181B : #B9BDC4;
+    out property <color> shadow-light: dark ? #3A3D44 : #FFFFFF;
+    out property <color> ink: dark ? #ECEDEF : #1B1C1F;
+    out property <color> ink-soft: dark ? #A6A9B0 : #5F626A;
+    out property <color> ink-faint: dark ? #6C6F77 : #9A9DA4;
+    out property <color> chip: dark ? #4B4E56 : #A9ACB3;
+    out property <color> on-chip: dark ? #E4E5E9 : #F4F5F7;
+    out property <color> accent: dark ? #E6A04A : #D98A2B;
+    out property <color> warn-bg: dark ? #4A3923 : #F3DFC4;
+    out property <color> warn-ink: dark ? #F2B866 : #8A5212;
+    out property <color> seg-compressed: dark ? #8D9098 : #6E7179;
+    out property <color> seg-cached: dark ? #5B5E66 : #A9ACB3;
+    out property <color> track: dark ? #3A3C42 : #D2D4D9;
+    out property <color> good: dark ? #7CC796 : #3E8A55;
+
+    // Pressed-in wells: edge color, then progressively lighter copies.
+    out property <color> inset-edge: dark ? #1C1D21 : #C3C6CC;
+    out property <[color]> inset-shades: dark
+        ? [#202125, #222327, #242529, #25272B, #26282C, #27292D]
+        : [#CACDD2, #D0D2D7, #D5D7DB, #D9DBDF, #DCDEE2, #DFE0E4];
+
+    // Window card and etched dividers.
+    out property <color> card-rim: dark ? #FFFFFF14 : #FFFFFFB3;
+    out property <color> card-shadow: dark ? #000000A0 : #00000038;
+    out property <color> etch-dark: dark ? #00000050 : #00000012;
+    out property <color> etch-light: dark ? #FFFFFF0D : #FFFFFFB3;
+}
+
+// SVG path data on a 24x24 grid.
+export global Icons {
+    out property <string> list: "M4 7 H20 M4 12 H20 M4 17 H13";
+    out property <string> close: "M7 7 L17 17 M17 7 L7 17";
+    // Two sliders with round knobs; the lines stop at the knobs.
+    out property <string> sliders: "M4 8 H12.3 M17.7 8 H20 M4 16 H6.3 M11.7 16 H20 M17.7 8 A2.7 2.7 0 1 1 12.3 8 A2.7 2.7 0 1 1 17.7 8 M11.7 16 A2.7 2.7 0 1 1 6.3 16 A2.7 2.7 0 1 1 11.7 16";
+    out property <string> bolt: "M13 2.5 L5 13.5 H11.5 L10.5 21.5 L19 10 H12.5 Z";
+    out property <string> chart: "M3 17 L9 11 L13 15 L21 7 M15.5 7 H21 V12.5";
+    out property <string> sweep: "M20 12 A8 8 0 1 1 17.66 6.34 M20 3.5 V8.5 H15";
+}
+
+// A surface lifted off the page: dark shadow bottom-right, light shadow top-left.
+// Slint allows one shadow per element, so two stacked faces carry one each.
+export component Raised inherits Rectangle {
+    in property <length> radius: 24px;
+    in property <length> depth: 8px;
+    in property <brush> face: Palette.bg;
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: root.radius;
+        background: root.face;
+        drop-shadow-offset-x: root.depth;
+        drop-shadow-offset-y: root.depth;
+        drop-shadow-blur: root.depth * 2;
+        drop-shadow-color: Palette.shadow-dark;
+    }
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: root.radius;
+        background: root.face;
+        drop-shadow-offset-x: -root.depth;
+        drop-shadow-offset-y: -root.depth;
+        drop-shadow-blur: root.depth * 2;
+        drop-shadow-color: Palette.shadow-light;
+    }
+
+    @children
+}
+
+// A surface pressed into the page. Slint has no inner shadows, so copies of
+// the shape, each shifted further down-right and lighter, leave a soft dark
+// crescent along the top-left edge.
+export component Inset inherits Rectangle {
+    in property <length> radius: 24px;
+    in property <length> depth: 6px;
+
+    border-radius: root.radius;
+    background: Palette.inset-edge;
+    clip: true;
+
+    for shade[i] in Palette.inset-shades : Rectangle {
+        x: (i + 1) * root.depth / 6;
+        y: (i + 1) * root.depth / 6;
+        width: root.width;
+        height: root.height;
+        border-radius: root.radius;
+        background: shade;
+    }
+
+    @children
+}
+
+// Raised at rest, pressed in while held or while `active` (a toggle that's on).
+export component NeuButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <bool> active: false;
+    // Toggles like game mode turn amber when on; panel buttons just stay pressed.
+    in property <bool> accent-when-active: true;
+    in property <length> icon-size: 20px;
+    in property <length> font-size: 18px;
+    in property <length> radius: root.height / 2;
+    in property <length> depth: 5px;
+    // Name for screen readers; defaults to the visible text.
+    in property <string> label: root.text;
+    // Destructive actions (close, force quit) get warning-colored text.
+    in property <bool> warn: false;
+    callback clicked;
+
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+
+    property <bool> sunk: root.active || touch.pressed;
+    property <color> tint: root.active && root.accent-when-active ? Palette.accent : Palette.ink;
+
+    if !root.sunk : Raised {
+        width: root.width;
+        height: root.height;
+        radius: root.radius;
+        depth: root.depth;
+    }
+
+    if root.sunk : Inset {
+        width: root.width;
+        height: root.height;
+        radius: root.radius;
+        depth: root.depth;
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 10px;
+        padding-left: root.text != "" ? 14px : 0px;
+        padding-right: root.text != "" ? 14px : 0px;
+
+        if root.icon != "" : VerticalLayout {
+            alignment: center;
+            Path {
+                width: root.icon-size;
+                height: root.icon-size;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                commands: root.icon;
+                stroke: root.tint;
+                stroke-width: 1.7px;
+                fill: transparent;
+            }
+        }
+
+        if root.text != "" : Text {
+            text: root.text;
+            color: root.warn ? Palette.warn-ink : Palette.ink-soft;
+            font-size: root.font-size;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}

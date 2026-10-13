@@ -1,0 +1,5 @@
+# Cross-compiling the Windows .exe from macOS/Linux (needs mingw-w64).
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+# Link the C runtime statically so the .exe runs without extra DLLs.
+rustflags = ["-C", "target-feature=+crt-static"]

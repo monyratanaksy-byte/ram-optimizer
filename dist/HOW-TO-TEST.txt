@@ -1,0 +1,55 @@
+RAM Optimizer - test build
+==========================
+
+Requirements: Windows 10 or 11, 64-bit. No install needed.
+
+Run it
+------
+1. Put RAMOptimizer.exe somewhere permanent first (e.g. Documents or
+   C:\Tools). It registers itself to start with Windows from where it is,
+   so if you move it later, just open it once from the new place.
+2. Double-click RAMOptimizer.exe. If Windows says "Windows protected your
+   PC" (the file isn't signed): More info > Run anyway.
+3. Click "Yes" when it asks for administrator permission. With "Yes" it
+   can also clear the cache and start at sign-in without asking again.
+   With "No" it still works; the title says "limited".
+
+Where it lives
+--------------
+- Red button: hides the window; the app keeps running in the tray (the
+  arrow near the clock). Left-click the tray icon to open it again;
+  right-click for Optimize, Game mode and Quit.
+- It starts with Windows by default, hidden in the tray. Turn that off in
+  Settings (sliders icon, top right) > General.
+- Opening the .exe again just shows the window of the running copy.
+- It updates itself: a few hours after a new version is published (or on
+  the next start) it downloads it, checks its signature and restarts into
+  it. Never in the middle of a game. Settings > General shows the version.
+
+What to try
+-----------
+- Numbers: compare with Task Manager > Performance > Memory.
+- List button: your apps, biggest first. x closes an app (asks first);
+  "Force quit" appears if the app ignores it.
+- Chart button: usage for the last minute, hour or 24 hours, and which
+  app was biggest at the peak. Hour/day fill in while the app runs.
+- Ring button: auto-clear limit. Optimize: trims every background app.
+- Bolt: game mode. Also turns on by itself when a game starts (Steam,
+  Epic, Riot, Xbox, GOG, EA, Ubisoft folders, or anything fullscreen
+  that isn't a browser or video player) and off when it closes.
+- Settings > General: start with Windows, alerts, theme (System / Light /
+  Dark), auto game mode, apps to close when gaming.
+- Settings > Startup apps: what launches with Windows and how much RAM it
+  uses now. Switch them off here (same as Task Manager's Startup tab).
+- Settings > Check-up: RAM speed (XMP/EXPO), memory sticks, page file,
+  memory compression.
+- Alerts: a Windows notification when memory is about to run out, or an
+  app keeps growing for an hour.
+
+If something goes wrong
+-----------------------
+- Look for ram-optimizer.log next to the .exe and send it back.
+- Run with demo data (touches nothing):  RAMOptimizer.exe --demo
+- Quit from the tray menu restores every priority the app changed.
+- To remove it fully: Settings > General > turn off "Start with Windows",
+  quit from the tray, delete the .exe and %APPDATA%\RAM Optimizer.
